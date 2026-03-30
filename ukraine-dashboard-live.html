@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Украина: Обзорный дашборд</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.10.4/Recharts.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  body { font-family: 'Inter', sans-serif; }
+  .spinner { border: 3px solid #e5e7eb; border-top: 3px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-in { animation: fadeIn 0.3s ease-out; }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+</style>
+</head>
+<body class="bg-gray-50">
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend, AreaChart, Area } = Recharts;
+
+// ====== CONFIG ======
+const CORS_PROXIES = [
+  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+const RSS_FEEDS = [
+  // Ukrainian sources
+  { url: "https://www.ukrinform.net/rss/block-lastnews", source: "ua", sourceLabel: "Ukrinform", lang: "en" },
+  { url: "https://www.pravda.com.ua/eng/rss/", source: "ua", sourceLabel: "Ukrainska Pravda", lang: "en" },
+  // European sources
+  { url: "https://feeds.bbci.co.uk/news/world/europe/rss.xml", source: "eu", sourceLabel: "BBC News", lang: "en" },
+  { url: "https://www.rferl.org/api/z-pqpiev-qoj", source: "eu", sourceLabel: "Radio Free Europe", lang: "en" },
+  { url: "https://rss.dw.com/rdf/rss-en-world", source: "eu", sourceLabel: "DW News", lang: "en" },
+  // American sources
+  { url: "https://rss.nytimes.com/services/xml/rss/nyt/Europe.xml", source: "us", sourceLabel: "NY Times", lang: "en" },
+  { url: "https://feeds.washingtonpost.com/rss/world", source: "us", sourceLabel: "Washington Post", lang: "en" },
+  // Russian sources (English versions)
+  { url: "https://tass.com/rss/v2.xml", source: "ru", sourceLabel: "TASS", lang: "en" },
+];
+
+const GOOGLE_NEWS_FEEDS = [
+  { query: "Ukraine+war+military", source: "mixed", category: "military" },
+  { query: "Ukraine+economy+GDP", source: "mixed", category: "economy" },
+  { query: "Ukraine+peace+negotiations+ceasefire", source: "mixed", category: "negotiations" },
+  { query: "Ukraine+real+estate+housing", source: "mixed", category: "realestate" },
+  { query: "Ukraine+aviation+flights+airspace", source: "mixed", category: "aviation" },
+  { query: "Ukraine+tourism+travel+safety", source: "mixed", category: "tourism" },
+  { query: "Ukraine+security+missile+drone+attack", source: "mixed", category: "security" },
+];
+
+const CATEGORIES = [
+  { id: "all", label: "\u0412\u0441\u0435", icon: "\ud83c\udf10", color: "#1e40af" },
+  { id: "military", label: "\u0412\u043e\u0435\u043d\u043d\u0430\u044f \u0441\u0438\u0442\u0443\u0430\u0446\u0438\u044f", icon: "\u2694\ufe0f", color: "#dc2626" },
+  { id: "negotiations", label: "\u041f\u0435\u0440\u0435\u0433\u043e\u0432\u043e\u0440\u044b", icon: "\ud83e\udd1d", color: "#7c3aed" },
+  { id: "economy", label: "\u042d\u043a\u043e\u043d\u043e\u043c\u0438\u043a\u0430", icon: "\ud83d\udcc8", color: "#16a34a" },
+  { id: "realestate", label: "\u041d\u0435\u0434\u0432\u0438\u0436\u0438\u043c\u043e\u0441\u0442\u044c", icon: "\ud83c\udfe0", color: "#f59e0b" },
+  { id: "security", label: "\u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e\u0441\u0442\u044c", icon: "\ud83d\udee1\ufe0f", color: "#e11d48" },
+  { id: "tourism", label: "\u0422\u0443\u0440\u0438\u0437\u043c", icon: "\u2708\ufe0f", color: "#0891b2" },
+  { id: "aviation", label: "\u0410\u0432\u0438\u0430\u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435", icon: "\ud83d\udee9\ufe0f", color: "#475569" },
+];
+
+const SOURCES = [
+  { id: "ua", label: "\u0423\u043a\u0440\u0430\u0438\u043d\u0430", flag: "\ud83c\uddfa\ud83c\udde6", color: "#005bbb" },
+  { id: "ru", label: "\u0420\u043e\u0441\u0441\u0438\u044f", flag: "\ud83c\uddf7\ud83c\uddfa", color: "#d52b1e" },
+  { id: "eu", label: "\u0415\u0432\u0440\u043e\u043f\u0430", flag: "\ud83c\uddea\ud83c\uddfa", color: "#003399" },
+  { id: "us", label: "\u0421\u0428\u0410", flag: "\ud83c\uddfa\ud83c\uddf8", color: "#3c3b6e" },
+  { id: "mixed", label: "\u0420\u0430\u0437\u043d\u044b\u0435", flag: "\ud83c\udf0d", color: "#6b7280" },
+];
+
+// ====== CATEGORY DETECTION ======
+const CATEGORY_KEYWORDS = {
+  military: ["military", "army", "troops", "offensive", "frontline", "battle", "combat", "soldier", "weapon", "tank", "artillery", "brigade", "\u0432\u043e\u0435\u043d", "\u0430\u0440\u043c\u0438", "\u043d\u0430\u0441\u0442\u0443\u043f\u043b\u0435\u043d\u0438", "\u0444\u0440\u043e\u043d\u0442", "\u0431\u043e\u0439", "\u0412\u0421\u0423", "territory", "captured", "liberated", "advance"],
+  negotiations: ["negotiat", "peace", "ceasefire", "talk", "diplomac", "deal", "agreement", "summit", "mediati", "Trump", "Zelensky", "Putin", "\u043f\u0435\u0440\u0435\u0433\u043e\u0432\u043e\u0440", "\u043c\u0438\u0440", "\u043f\u0435\u0440\u0435\u043c\u0438\u0440\u0438", "sanction", "tariff"],
+  economy: ["economy", "GDP", "inflation", "trade", "export", "import", "budget", "finance", "invest", "bank", "currency", "hryvnia", "\u044d\u043a\u043e\u043d\u043e\u043c\u0438\u043a", "\u0412\u0412\u041f", "\u0438\u043d\u0444\u043b\u044f\u0446\u0438", "growth", "IMF", "World Bank", "EBRD", "aid package", "reconstruction"],
+  realestate: ["real estate", "housing", "property", "apartment", "construction", "building", "rent", "mortgage", "\u043d\u0435\u0434\u0432\u0438\u0436\u0438\u043c", "\u0436\u0438\u043b", "\u043a\u0432\u0430\u0440\u0442\u0438\u0440"],
+  security: ["missile", "drone", "attack", "strike", "bomb", "shell", "air raid", "alert", "casualt", "kill", "wound", "destroy", "intercept", "air defense", "\u0440\u0430\u043a\u0435\u0442", "\u0434\u0440\u043e\u043d", "\u0443\u0434\u0430\u0440", "\u0430\u0442\u0430\u043a", "\u041f\u0412\u041e", "Shahed", "Iskander", "Kalibr", "energy infrastructure"],
+  tourism: ["tourism", "tourist", "travel", "visit", "hotel", "vacation", "\u0442\u0443\u0440\u0438\u0437\u043c", "\u043f\u0443\u0442\u0435\u0448\u0435\u0441\u0442\u0432", "Carpathian", "Lviv visit", "safe region"],
+  aviation: ["aviation", "flight", "airport", "airspace", "airline", "Ryanair", "Boryspil", "aircraft", "\u0430\u0432\u0438\u0430", "\u0430\u044d\u0440\u043e\u043f\u043e\u0440\u0442", "\u0440\u0435\u0439\u0441", "reopen"],
+};
+
+function detectCategory(title, description) {
+  const text = `${title} ${description}`.toLowerCase();
+  let bestCat = "military";
+  let bestScore = 0;
+  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    const score = keywords.filter(kw => text.includes(kw.toLowerCase())).length;
+    if (score > bestScore) { bestScore = score; bestCat = cat; }
+  }
+  return bestCat;
+}
+
+function detectSource(feedSource, link) {
+  if (feedSource !== "mixed") return feedSource;
+  const url = (link || "").toLowerCase();
+  if (url.includes("bbc") || url.includes("dw.com") || url.includes("reuters") || url.includes("rferl") || url.includes("guardian")) return "eu";
+  if (url.includes("nytimes") || url.includes("cnn") || url.includes("washingtonpost") || url.includes("apnews") || url.includes("aljazeera")) return "us";
+  if (url.includes("tass") || url.includes("rt.com") || url.includes("rbc.ru") || url.includes("ria.ru")) return "ru";
+  if (url.includes("ukrinform") || url.includes("pravda.com.ua") || url.includes("unian") || url.includes("ukr")) return "ua";
+  return "eu";
+}
+
+function detectImpact(title, desc) {
+  const text = `${title} ${desc}`.toLowerCase();
+  const highWords = ["massive", "record", "historic", "unprecedented", "killed", "dead", "destroy", "offensive", "ceasefire", "peace deal", "breakthrough", "\u0440\u0435\u043a\u043e\u0440\u0434", "crisis"];
+  const lowWords = ["tourist", "hotel", "restaurant", "museum", "apartment price", "rent"];
+  if (highWords.some(w => text.includes(w))) return "high";
+  if (lowWords.some(w => text.includes(w))) return "low";
+  return "medium";
+}
+
+// ====== RSS PARSER ======
+function parseRSSXml(xmlText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "text/xml");
+  const items = [];
+  // Try RSS 2.0
+  doc.querySelectorAll("item").forEach(item => {
+    const title = item.querySelector("title")?.textContent?.trim() || "";
+    const link = item.querySelector("link")?.textContent?.trim() || "";
+    const desc = item.querySelector("description")?.textContent?.trim() || "";
+    const pubDate = item.querySelector("pubDate")?.textContent?.trim() || "";
+    if (title) items.push({ title, link, description: desc.replace(/<[^>]*>/g, "").slice(0, 300), pubDate });
+  });
+  // Try Atom
+  if (items.length === 0) {
+    doc.querySelectorAll("entry").forEach(entry => {
+      const title = entry.querySelector("title")?.textContent?.trim() || "";
+      const link = entry.querySelector("link")?.getAttribute("href") || "";
+      const desc = (entry.querySelector("summary") || entry.querySelector("content"))?.textContent?.trim() || "";
+      const pubDate = entry.querySelector("published")?.textContent?.trim() || entry.querySelector("updated")?.textContent?.trim() || "";
+      if (title) items.push({ title, link, description: desc.replace(/<[^>]*>/g, "").slice(0, 300), pubDate });
+    });
+  }
+  return items;
+}
+
+async function fetchWithProxy(url, proxyIndex = 0) {
+  if (proxyIndex >= CORS_PROXIES.length) throw new Error("All proxies failed");
+  try {
+    const proxyUrl = CORS_PROXIES[proxyIndex](url);
+    const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.text();
+  } catch {
+    return fetchWithProxy(url, proxyIndex + 1);
+  }
+}
+
+async function fetchGoogleNews(query, category) {
+  const url = `https://news.google.com/rss/search?q=${query}+when:7d&hl=en-US&gl=US&ceid=US:en`;
+  try {
+    const xml = await fetchWithProxy(url);
+    const items = parseRSSXml(xml);
+    return items.map(item => ({
+      ...item,
+      feedSource: "mixed",
+      feedSourceLabel: "Google News",
+      feedCategory: category,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchRSSFeed(feed) {
+  try {
+    const xml = await fetchWithProxy(feed.url);
+    const items = parseRSSXml(xml);
+    return items.map(item => ({
+      ...item,
+      feedSource: feed.source,
+      feedSourceLabel: feed.sourceLabel,
+      feedCategory: null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// ====== STATIC DATA (fallback + charts) ======
+const STATIC_CHART_DATA = {
+  gdp: [
+    { year: "2021", value: 3.4 }, { year: "2022", value: -29.1 },
+    { year: "2023", value: 5.3 }, { year: "2024", value: 4.1 },
+    { year: "2025", value: 3.0 }, { year: "2026*", value: 2.5 },
+  ],
+  inflation: [
+    { month: "\u0421\u0435\u043d 25", value: 8.6 }, { month: "\u041e\u043a\u0442 25", value: 8.2 },
+    { month: "\u041d\u043e\u044f 25", value: 7.9 }, { month: "\u0414\u0435\u043a 25", value: 7.7 },
+    { month: "\u042f\u043d\u0432 26", value: 7.4 }, { month: "\u0424\u0435\u0432 26", value: 7.6 },
+  ],
+  drones: [
+    { month: "\u0424\u0435\u0432 25", ru: 3900, ua: 1800 }, { month: "\u0418\u044e\u043d 25", ru: 4200, ua: 2500 },
+    { month: "\u0421\u0435\u043d 25", ru: 5200, ua: 3400 }, { month: "\u0414\u0435\u043a 25", ru: 5200, ua: 4100 },
+    { month: "\u041c\u0430\u0440 26", ru: 5500, ua: 5300 },
+  ],
+  realEstate: [
+    { city: "\u041a\u0438\u0435\u0432", price: 2011 }, { city: "\u041b\u044c\u0432\u043e\u0432", price: 1450 },
+    { city: "\u041e\u0434\u0435\u0441\u0441\u0430", price: 1200 }, { city: "\u0425\u0430\u0440\u044c\u043a\u043e\u0432", price: 750 },
+    { city: "\u0414\u043d\u0435\u043f\u0440", price: 850 },
+  ],
+  energy: [
+    { name: "\u0423\u043d\u0438\u0447\u0442\u043e\u0436\u0435\u043d\u043e", value: 5.5, color: "#ef4444" },
+    { name: "\u0412\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u043e", value: 3.5, color: "#22c55e" },
+  ],
+  opinion: [
+    { name: "\u0417\u0430 \u043f\u0435\u0440\u0435\u0433\u043e\u0432\u043e\u0440\u044b (\u0420\u0424)", value: 67, color: "#d52b1e" },
+    { name: "\u0412\u0435\u0440\u044f\u0442 \u0432 \u043c\u0438\u0440 (\u0423\u0410)", value: 25, color: "#005bbb" },
+  ],
+};
+
+// ====== COMPONENTS ======
+function ImpactBadge({ level }) {
+  const styles = {
+    high: "bg-red-100 text-red-700 border-red-200",
+    medium: "bg-yellow-100 text-yellow-700 border-yellow-200",
+    low: "bg-green-100 text-green-700 border-green-200",
+  };
+  const labels = { high: "\u0412\u044b\u0441\u043e\u043a\u043e\u0435", medium: "\u0421\u0440\u0435\u0434\u043d\u0435\u0435", low: "\u041d\u0438\u0437\u043a\u043e\u0435" };
+  return (
+    <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${styles[level]}`}>
+      {labels[level]}
+    </span>
+  );
+}
+
+function NewsCard({ item, expanded, onToggle }) {
+  const cat = CATEGORIES.find(c => c.id === item.category);
+  const src = SOURCES.find(s => s.id === item.source);
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-200 fade-in">
+      <div className="p-4 cursor-pointer" onClick={onToggle}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-lg" style={{ backgroundColor: (cat?.color || "#6b7280") + "15" }}>
+              {cat?.icon || "\ud83c\udf10"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-gray-900 text-sm leading-snug">{item.title}</h3>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                <span className="text-xs text-gray-500 flex items-center gap-1">
+                  \u23f0 {item.date}
+                </span>
+                <span className="text-xs px-1.5 py-0.5 rounded-md font-medium" style={{ backgroundColor: (src?.color || "#6b7280") + "15", color: src?.color }}>
+                  {src?.flag} {item.sourceLabel}
+                </span>
+                <ImpactBadge level={item.impact} />
+              </div>
+            </div>
+          </div>
+          <button className="text-gray-400 hover:text-gray-600 mt-1 flex-shrink-0 text-lg">
+            {expanded ? "\u25b2" : "\u25bc"}
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-gray-100 pt-3">
+          <p className="text-sm text-gray-600 leading-relaxed">{item.description}</p>
+          {item.link && (
+            <a href={item.link} target="_blank" rel="noopener noreferrer"
+               className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-2 font-medium">
+              \u2197 \u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value, subtext, color }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl" style={{ backgroundColor: color + "15" }}>
+          {icon}
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 font-medium">{label}</p>
+          <p className="text-lg font-bold text-gray-900">{value}</p>
+          {subtext && <p className="text-xs text-gray-400">{subtext}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChartCard({ title, children }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+      <h3 className="text-sm font-semibold text-gray-700 mb-3">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function CircleProgress({ value, color, label }) {
+  return (
+    <div className="text-center">
+      <div className="relative w-24 h-24 mx-auto mb-2">
+        <svg viewBox="0 0 36 36" className="w-full h-full" style={{ transform: "rotate(-90deg)" }}>
+          <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e5e7eb" strokeWidth="3"/>
+          <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke={color} strokeWidth="3" strokeDasharray={`${value}, 100`}/>
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-xl font-bold" style={{ color }}>{value}%</span>
+        </div>
+      </div>
+      <p className="text-xs text-gray-600 font-medium max-w-24">{label}</p>
+    </div>
+  );
+}
+
+// ====== MAIN APP ======
+function App() {
+  const [news, setNews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeSource, setActiveSource] = useState("all");
+  const [expandedNews, setExpandedNews] = useState(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("news");
+  const [feedStatus, setFeedStatus] = useState({ loaded: 0, total: 0, errors: 0 });
+  const refreshInterval = useRef(null);
+
+  const fetchAllNews = useCallback(async () => {
+    setLoading(true);
+    setFeedStatus({ loaded: 0, total: RSS_FEEDS.length + GOOGLE_NEWS_FEEDS.length, errors: 0 });
+
+    const allItems = [];
+    let loaded = 0;
+    let errors = 0;
+
+    // Fetch Google News (categorized)
+    const gnPromises = GOOGLE_NEWS_FEEDS.map(async (feed) => {
+      try {
+        const items = await fetchGoogleNews(feed.query, feed.category);
+        loaded++;
+        setFeedStatus(prev => ({ ...prev, loaded }));
+        return items;
+      } catch {
+        errors++;
+        loaded++;
+        setFeedStatus(prev => ({ ...prev, loaded, errors }));
+        return [];
+      }
+    });
+
+    // Fetch RSS feeds
+    const rssPromises = RSS_FEEDS.map(async (feed) => {
+      try {
+        const items = await fetchRSSFeed(feed);
+        loaded++;
+        setFeedStatus(prev => ({ ...prev, loaded }));
+        return items;
+      } catch {
+        errors++;
+        loaded++;
+        setFeedStatus(prev => ({ ...prev, loaded, errors }));
+        return [];
+      }
+    });
+
+    const results = await Promise.allSettled([...gnPromises, ...rssPromises]);
+
+    results.forEach(r => {
+      if (r.status === "fulfilled") allItems.push(...r.value);
+    });
+
+    // Filter Ukraine-related + last 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const ukraineKeywords = ["ukrain", "\u0443\u043a\u0440\u0430\u0438\u043d", "kyiv", "kiev", "zelensky", "\u0437\u0435\u043b\u0435\u043d\u0441\u043a", "donbas", "crimea", "\u043a\u0440\u044b\u043c", "kharkiv", "odesa", "odessa", "lviv", "\u043b\u044c\u0432\u043e\u0432", "zaporizhzhia", "kherson", "donetsk", "luhansk", "mariupol"];
+
+    const processedItems = allItems
+      .filter(item => {
+        const text = `${item.title} ${item.description}`.toLowerCase();
+        const isUkraineRelated = item.feedCategory || ukraineKeywords.some(kw => text.includes(kw));
+        if (!isUkraineRelated) return false;
+
+        if (item.pubDate) {
+          const d = new Date(item.pubDate);
+          if (!isNaN(d.getTime()) && d < sevenDaysAgo) return false;
+        }
+        return true;
+      })
+      .map((item, idx) => {
+        const category = item.feedCategory || detectCategory(item.title, item.description);
+        const source = detectSource(item.feedSource, item.link);
+        const impact = detectImpact(item.title, item.description);
+        const date = item.pubDate ? new Date(item.pubDate) : new Date();
+        const dateStr = !isNaN(date.getTime())
+          ? date.toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+          : "\u0421\u0435\u0433\u043e\u0434\u043d\u044f";
+
+        return {
+          id: `${source}-${idx}-${Date.now()}`,
+          title: item.title,
+          description: item.description || "\u041f\u043e\u0434\u0440\u043e\u0431\u043d\u043e\u0441\u0442\u0438 \u043f\u043e \u0441\u0441\u044b\u043b\u043a\u0435 \u043d\u0430 \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a.",
+          link: item.link,
+          category,
+          source,
+          sourceLabel: item.feedSourceLabel || "\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a",
+          date: dateStr,
+          rawDate: date,
+          impact,
+        };
+      })
+      .sort((a, b) => b.rawDate - a.rawDate);
+
+    // Deduplicate by similar titles
+    const seen = new Set();
+    const unique = processedItems.filter(item => {
+      const key = item.title.toLowerCase().replace(/[^a-z\u0430-\u044f0-9]/g, "").slice(0, 60);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    setNews(unique);
+    setLastUpdated(new Date());
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchAllNews();
+    refreshInterval.current = setInterval(fetchAllNews, 30 * 60 * 1000); // refresh every 30 min
+    return () => clearInterval(refreshInterval.current);
+  }, [fetchAllNews]);
+
+  const filteredNews = useMemo(() => {
+    return news.filter(item => {
+      const catMatch = activeCategory === "all" || item.category === activeCategory;
+      const srcMatch = activeSource === "all" || item.source === activeSource;
+      const searchMatch = !searchQuery || item.title.toLowerCase().includes(searchQuery.toLowerCase()) || item.description.toLowerCase().includes(searchQuery.toLowerCase());
+      return catMatch && srcMatch && searchMatch;
+    });
+  }, [news, activeCategory, activeSource, searchQuery]);
+
+  const categoryCounts = useMemo(() => {
+    const counts = {};
+    CATEGORIES.forEach(c => { counts[c.id] = 0; });
+    news.forEach(n => { counts[n.category] = (counts[n.category] || 0) + 1; });
+    counts.all = news.length;
+    return counts;
+  }, [news]);
+
+  const sourceCounts = useMemo(() => {
+    const counts = { all: news.length };
+    SOURCES.forEach(s => { counts[s.id] = 0; });
+    news.forEach(n => { counts[n.source] = (counts[n.source] || 0) + 1; });
+    return counts;
+  }, [news]);
+
+  const toggleExpand = (id) => {
+    setExpandedNews(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const expandAll = () => {
+    if (expandedNews.size === filteredNews.length) setExpandedNews(new Set());
+    else setExpandedNews(new Set(filteredNews.map(n => n.id)));
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-blue-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-yellow-400 rounded-xl flex items-center justify-center text-xl">
+                \ud83c\udf10
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-gray-900">\u0423\u043a\u0440\u0430\u0438\u043d\u0430: \u041e\u0431\u0437\u043e\u0440\u043d\u044b\u0439 \u0434\u0430\u0448\u0431\u043e\u0440\u0434</h1>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  {lastUpdated && (
+                    <span>\u041e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u043e: {lastUpdated.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
+                  )}
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 bg-green-500 rounded-full pulse-dot"></span>
+                    Live \u00b7 \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 \u043a\u0430\u0436\u0434\u044b\u0435 30 \u043c\u0438\u043d
+                  </span>
+                  <span>\u00b7 \u041c\u0443\u043b\u044c\u0442\u0438\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u043e\u0432\u044b\u0439 \u0430\u043d\u0430\u043b\u0438\u0437</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={fetchAllNews} disabled={loading}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center gap-1.5 transition-all disabled:opacity-50">
+                {loading ? <span className="spinner" style={{width:14,height:14,borderWidth:2}}></span> : "\ud83d\udd04"} \u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c
+              </button>
+              {["news", "charts"].map(tab => (
+                <button key={tab} onClick={() => setActiveTab(tab)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all ${activeTab === tab ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                  {tab === "news" ? "\ud83d\udcf0 \u041d\u043e\u0432\u043e\u0441\u0442\u0438" : "\ud83d\udcca \u0410\u043d\u0430\u043b\u0438\u0442\u0438\u043a\u0430"}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        {/* Loading indicator */}
+        {loading && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 flex items-center gap-3">
+            <div className="spinner"></div>
+            <div>
+              <p className="text-sm font-medium text-blue-900">\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043d\u043e\u0432\u043e\u0441\u0442\u0435\u0439 \u0438\u0437 {feedStatus.total} \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u043e\u0432...</p>
+              <p className="text-xs text-blue-700">\u0417\u0430\u0433\u0440\u0443\u0436\u0435\u043d\u043e: {feedStatus.loaded}/{feedStatus.total} {feedStatus.errors > 0 && `(\u043e\u0448\u0438\u0431\u043e\u043a: ${feedStatus.errors})`}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Key Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <StatCard icon="\ud83d\udcc8" label="\u0420\u043e\u0441\u0442 \u0412\u0412\u041f (\u043f\u0440\u043e\u0433\u043d\u043e\u0437 2026)" value="+2,5%" subtext="\u0415\u0411\u0420\u0420" color="#16a34a" />
+          <StatCard icon="\u2694\ufe0f" label="\u0414\u0440\u043e\u043d\u043e\u0432 \u0420\u0424 \u0437\u0430 \u043d\u0435\u0434\u0435\u043b\u044e" value="3 000+" subtext="+ 1 450 \u041a\u0410\u0411\u043e\u0432, 40 \u0440\u0430\u043a\u0435\u0442" color="#dc2626" />
+          <StatCard icon="\ud83d\udee9\ufe0f" label="\u0414\u043e \u043f\u0435\u0440\u0435\u0437\u0430\u043f\u0443\u0441\u043a\u0430 \u0440\u0435\u0439\u0441\u043e\u0432" value="45-50 \u0434\u043d." subtext="\u041b\u044c\u0432\u043e\u0432 \u043f\u0435\u0440\u0432\u044b\u0439" color="#0891b2" />
+          <StatCard icon="\ud83c\udfe0" label="\u0426\u0435\u043d\u0430 \u043c\u00b2 \u041a\u0438\u0435\u0432 (\u043f\u0435\u0440\u0432\u0438\u0447\u043a\u0430)" value="$2 011" subtext="+3,3% \u0437\u0430 \u0433\u043e\u0434" color="#f59e0b" />
+        </div>
+
+        {activeTab === "charts" ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <ChartCard title="\u0414\u0438\u043d\u0430\u043c\u0438\u043a\u0430 \u0412\u0412\u041f \u0423\u043a\u0440\u0430\u0438\u043d\u044b (%, \u0433/\u0433)">
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={STATIC_CHART_DATA.gdp}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="year" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Bar dataKey="value" name="\u0412\u0412\u041f %">
+                      {STATIC_CHART_DATA.gdp.map((entry, i) => (
+                        <Cell key={i} fill={entry.value >= 0 ? "#22c55e" : "#ef4444"} radius={[4, 4, 0, 0]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartCard>
+
+              <ChartCard title="\u0418\u043d\u0444\u043b\u044f\u0446\u0438\u044f (%)">
+                <ResponsiveContainer width="100%" height={220}>
+                  <LineChart data={STATIC_CHART_DATA.inflation}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis domain={[6, 10]} tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Line type="monotone" dataKey="value" stroke="#f59e0b" strokeWidth={2} dot={{ r: 4, fill: "#f59e0b" }} name="\u0418\u043d\u0444\u043b\u044f\u0446\u0438\u044f %" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartCard>
+
+              <ChartCard title="\u0414\u0440\u043e\u043d\u044b: \u0420\u043e\u0441\u0441\u0438\u044f vs \u0423\u043a\u0440\u0430\u0438\u043d\u0430 (\u0432 \u043c\u0435\u0441\u044f\u0446)">
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={STATIC_CHART_DATA.drones}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Area type="monotone" dataKey="ru" name="\u0420\u043e\u0441\u0441\u0438\u044f" fill="rgba(239,68,68,0.12)" stroke="#ef4444" strokeWidth={2} />
+                    <Area type="monotone" dataKey="ua" name="\u0423\u043a\u0440\u0430\u0438\u043d\u0430" fill="rgba(59,130,246,0.12)" stroke="#3b82f6" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartCard>
+
+              <ChartCard title="\u0426\u0435\u043d\u044b \u043d\u0430 \u043d\u0435\u0434\u0432\u0438\u0436\u0438\u043c\u043e\u0441\u0442\u044c ($/\u043c\u00b2, \u043f\u0435\u0440\u0432\u0438\u0447\u043a\u0430)">
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={STATIC_CHART_DATA.realEstate} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} />
+                    <YAxis dataKey="city" type="category" tick={{ fontSize: 11 }} width={65} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                    <Bar dataKey="price" name="$/\u043c\u00b2" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartCard>
+
+              <ChartCard title="\u042d\u043d\u0435\u0440\u0433\u0435\u0442\u0438\u043a\u0430: \u0443\u0440\u043e\u043d \u0438 \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 (\u0413\u0412\u0442)">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie data={STATIC_CHART_DATA.energy} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={4} dataKey="value"
+                      label={({ name, value }) => `${name}: ${value} \u0413\u0412\u0442`}>
+                      {STATIC_CHART_DATA.energy.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartCard>
+
+              <ChartCard title="\u041e\u0431\u0449\u0435\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0435 \u043c\u043d\u0435\u043d\u0438\u0435 \u043e \u043f\u0435\u0440\u0435\u0433\u043e\u0432\u043e\u0440\u0430\u0445 (%)">
+                <div className="flex items-center justify-center h-48 gap-8">
+                  {STATIC_CHART_DATA.opinion.map(item => (
+                    <CircleProgress key={item.name} value={item.value} color={item.color} label={item.name} />
+                  ))}
+                </div>
+              </ChartCard>
+            </div>
+
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200 p-4">
+              <h3 className="text-sm font-semibold text-blue-900 mb-2">\u2139\ufe0f \u041a\u043b\u044e\u0447\u0435\u0432\u044b\u0435 \u0442\u0435\u043d\u0434\u0435\u043d\u0446\u0438\u0438 (\u043c\u0430\u0440\u0442 2026)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-blue-800">
+                {[
+                  "\u0423\u043a\u0440\u0430\u0438\u043d\u0430 \u0432\u043f\u0435\u0440\u0432\u044b\u0435 \u0434\u043e\u0441\u0442\u0438\u0433\u043b\u0430 \u043f\u0430\u0440\u0438\u0442\u0435\u0442\u0430 \u0441 \u0420\u043e\u0441\u0441\u0438\u0435\u0439 \u043f\u043e \u0434\u0430\u043b\u044c\u043d\u043e\u0431\u043e\u0439\u043d\u044b\u043c \u0434\u0440\u043e\u043d\u0430\u043c",
+                  "\u041f\u0435\u0440\u0435\u0433\u043e\u0432\u043e\u0440\u044b \u0432 \u0421\u0442\u0430\u043c\u0431\u0443\u043b\u0435: \u0442\u0435\u0440\u0440\u0438\u0442\u043e\u0440\u0438\u0438 \u2014 \u0433\u043b\u0430\u0432\u043d\u044b\u0439 \u043a\u0430\u043c\u0435\u043d\u044c \u043f\u0440\u0435\u0442\u043a\u043d\u043e\u0432\u0435\u043d\u0438\u044f",
+                  "\u041f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u043a\u0430 \u043a \u043e\u0442\u043a\u0440\u044b\u0442\u0438\u044e \u0432\u043e\u0437\u0434\u0443\u0448\u043d\u043e\u0433\u043e \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u0430 \u0430\u043a\u0442\u0438\u0432\u043d\u043e \u0432\u0435\u0434\u0451\u0442\u0441\u044f",
+                  "\u0420\u044b\u043d\u043e\u043a \u043d\u0435\u0434\u0432\u0438\u0436\u0438\u043c\u043e\u0441\u0442\u0438 \u0441\u0442\u0430\u0431\u0438\u043b\u0438\u0437\u0438\u0440\u0443\u0435\u0442\u0441\u044f, \u0446\u0435\u043d\u044b \u043c\u0435\u0434\u043b\u0435\u043d\u043d\u043e \u0440\u0430\u0441\u0442\u0443\u0442",
+                  "\u0412\u0412\u041f +2,5% \u043f\u0440\u043e\u0433\u043d\u043e\u0437 \u2014 \u044d\u043a\u043e\u043d\u043e\u043c\u0438\u043a\u0430 \u0443\u0441\u0442\u043e\u0439\u0447\u0438\u0432\u0430, \u043d\u043e \u043d\u0443\u0436\u043d\u043e $50 \u043c\u043b\u0440\u0434 \u0432\u043d\u0435\u0448\u043d\u0435\u0439 \u043f\u043e\u043c\u043e\u0449\u0438",
+                  "\u0417\u0430\u043f\u0430\u0434\u043d\u0430\u044f \u0423\u043a\u0440\u0430\u0438\u043d\u0430 \u0440\u0430\u0437\u0432\u0438\u0432\u0430\u0435\u0442 \u0442\u0443\u0440\u0438\u0437\u043c, \u043d\u043e \u043c\u0435\u0436\u0434\u0443\u043d\u0430\u0440\u043e\u0434\u043d\u044b\u0435 \u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0430\u0446\u0438\u0438 \u2014 \u00ab\u043d\u0435 \u0435\u0437\u0434\u0438\u0442\u044c\u00bb",
+                ].map((text, i) => (
+                  <div key={i} className="flex items-start gap-1.5">
+                    <span className="text-blue-500 mt-0.5">{"\u25cf"}</span>
+                    <span>{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Filters */}
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 max-w-sm">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">\ud83d\udd0d</span>
+                  <input type="text" placeholder="\u041f\u043e\u0438\u0441\u043a \u043f\u043e \u043d\u043e\u0432\u043e\u0441\u0442\u044f\u043c..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                </div>
+                <button onClick={expandAll}
+                  className="px-3 py-2 text-xs font-medium bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600 transition-colors flex-shrink-0">
+                  {expandedNews.size === filteredNews.length ? "\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u0432\u0441\u0435" : "\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u0432\u0441\u0435"}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <span className="text-gray-400 flex-shrink-0 text-sm">\u2699\ufe0f</span>
+                {CATEGORIES.map(cat => (
+                  <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                      activeCategory === cat.id ? "text-white shadow-sm" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
+                    style={activeCategory === cat.id ? { backgroundColor: cat.color } : {}}>
+                    {cat.icon} {cat.label}
+                    <span className={`text-xs px-1 rounded ${activeCategory === cat.id ? "bg-white/25" : "bg-gray-100"}`}>
+                      {categoryCounts[cat.id] || 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 font-medium">\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a:</span>
+                <button onClick={() => setActiveSource("all")}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${activeSource === "all" ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  \u0412\u0441\u0435 ({sourceCounts.all})
+                </button>
+                {SOURCES.map(src => (
+                  <button key={src.id} onClick={() => setActiveSource(src.id)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                      activeSource === src.id ? "text-white shadow-sm" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
+                    style={activeSource === src.id ? { backgroundColor: src.color } : {}}>
+                    {src.flag} {src.label} ({sourceCounts[src.id] || 0})
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-500">
+                \u041f\u043e\u043a\u0430\u0437\u0430\u043d\u043e <span className="font-semibold text-gray-700">{filteredNews.length}</span> \u043d\u043e\u0432\u043e\u0441\u0442\u0435\u0439 (\u0442\u043e\u043b\u044c\u043a\u043e \u0437\u0430 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0438\u0435 7 \u0434\u043d\u0435\u0439)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {!loading && filteredNews.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <p className="text-3xl mb-3">\u26a0\ufe0f</p>
+                  <p className="text-sm font-medium">\u041d\u0435\u0442 \u043d\u043e\u0432\u043e\u0441\u0442\u0435\u0439 \u043f\u043e \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u043c \u0444\u0438\u043b\u044c\u0442\u0440\u0430\u043c</p>
+                  <p className="text-xs mt-1">\u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 \u0438\u0437\u043c\u0435\u043d\u0438\u0442\u044c \u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u044e \u0438\u043b\u0438 \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a</p>
+                </div>
+              ) : (
+                filteredNews.map(item => (
+                  <NewsCard key={item.id} item={item} expanded={expandedNews.has(item.id)} onToggle={() => toggleExpand(item.id)} />
+                ))
+              )}
+            </div>
+          </>
+        )}
+
+        <div className="mt-6 mb-4 text-center">
+          <p className="text-xs text-gray-400">
+            \u0414\u0430\u043d\u043d\u044b\u0435 \u0441\u043e\u0431\u0438\u0440\u0430\u044e\u0442\u0441\u044f \u0438\u0437 \u0443\u043a\u0440\u0430\u0438\u043d\u0441\u043a\u0438\u0445, \u0440\u043e\u0441\u0441\u0438\u0439\u0441\u043a\u0438\u0445, \u0435\u0432\u0440\u043e\u043f\u0435\u0439\u0441\u043a\u0438\u0445 \u0438 \u0430\u043c\u0435\u0440\u0438\u043a\u0430\u043d\u0441\u043a\u0438\u0445 \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u043e\u0432. \u0410\u0432\u0442\u043e\u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 \u043a\u0430\u0436\u0434\u044b\u0435 30 \u043c\u0438\u043d\u0443\u0442.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
