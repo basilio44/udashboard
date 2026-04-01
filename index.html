@@ -224,6 +224,15 @@
       <div class="filter-row" id="categoryFilters"></div>
     </div>
     <div class="news-count" id="newsCount"></div>
+    <div id="loadProgress" class="hidden" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span id="loadProgressText" style="font-size:12px;color:#2563eb;font-weight:600"></span>
+        <span id="loadProgressPct" style="font-size:11px;color:#94a3b8;font-weight:600"></span>
+      </div>
+      <div class="progress-bar-wrap" style="height:6px">
+        <div class="progress-bar-fill" id="loadProgressFill" style="width:0%;transition:width .4s"></div>
+      </div>
+    </div>
     <div class="news-list" id="newsList"></div>
   </div>
 
@@ -324,6 +333,21 @@ let allNews = [];
 let ruClusters = [];
 let activeCategory = "all";
 const newsEmbeddings = new Map(); // item.id → number[]
+let _loadGen = 0; // cancel stale background operations
+
+function setProgress(pct, text) {
+  const el = document.getElementById('loadProgress');
+  if (!el) return;
+  el.classList.remove('hidden');
+  document.getElementById('loadProgressFill').style.width = Math.round(pct) + '%';
+  document.getElementById('loadProgressText').textContent = text;
+  document.getElementById('loadProgressPct').textContent = Math.round(pct) + '%';
+}
+
+function hideProgress() {
+  const el = document.getElementById('loadProgress');
+  if (el) el.classList.add('hidden');
+}
 let semanticMode = false;
 let activeSource = "all";
 let expandedSet = new Set();
@@ -773,10 +797,12 @@ async function translateAllNews(items, statusEl) {
 }
 
 async function fetchAllNews() {
+  const gen = ++_loadGen; // cancel any previous background operation
   const btn = document.getElementById("refreshBtn");
   const bar = document.getElementById("loadingBar");
-  bar.style.display = "none"; // hide old bar — progress shown inline
+  bar.style.display = "none";
   btn.disabled = true;
+  setProgress(0, 'Подключение к источникам...');
 
   const allSources = [
     ...RSS_FEEDS.map(f => ({ key: f.sourceLabel, label: f.sourceLabel, type: 'rss', data: f })),
@@ -788,20 +814,18 @@ async function fetchAllNews() {
   let loaded = 0;
   const rawItems = [];
 
-  function renderProgress(phase) {
+  function renderProgress() {
     const done = Object.values(srcStatus).filter(s => s !== 'loading').length;
     const errCount = Object.values(srcStatus).filter(s => s === 'err').length;
-    const pct = Math.round(done / total * 100);
+    const srcPct = done / total * 50; // sources = 0-50% of total pipeline
+
+    setProgress(srcPct, `Источники: ${done}/${total}${errCount ? ` (ошибок: ${errCount})` : ''}`);
 
     document.getElementById("newsCount").innerHTML =
-      phase
-        ? `<span style="color:#2563eb;font-weight:600">${phase}</span>`
-        : `Загружено источников: <span>${done}/${total}</span>${errCount ? ` · ошибок: ${errCount}` : ''}`;
+      `Источники: <span>${done}/${total}</span>${errCount ? ` · ошибок: <span style="color:#dc2626">${errCount}</span>` : ''}`;
 
     document.getElementById("newsList").innerHTML = `
       <div style="padding:8px 0 20px">
-        <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${phase ? 100 : pct}%"></div></div>
-        ${phase ? `<div class="loading-phase"><div class="spinner"></div>${phase}</div>` : ''}
         <div class="loading-source-grid">
           ${allSources.map(s => {
             const st = srcStatus[s.key];
@@ -878,21 +902,27 @@ async function fetchAllNews() {
   btn.disabled = false;
 
   // === БЫСТРЫЙ РЕЗУЛЬТАТ: показываем сразу с Jaccard ===
+  setProgress(50, 'Кластеризация...');
   detectAnalogs(allNews);
   clusterRussianNews();
   renderFilters();
   renderClustered();
 
   // === ФОНОВОЕ УЛУЧШЕНИЕ: перевод + семантика ===
-  const nc = document.getElementById("newsCount");
   (async () => {
     try {
       // Переводим только заголовки не-RU источников
+      const toTranslateCount = allNews.filter(n => n.source !== 'ru').length;
       await translateAllNews(allNews, {
         set textContent(v) {
-          if (v) nc.innerHTML = `<span style="color:#2563eb;font-weight:600">⟳ ${v}</span>`;
+          if (!v || gen !== _loadGen) return;
+          const m = v.match(/(\d+)\/(\d+)/);
+          if (m) setProgress(50 + (parseInt(m[1]) / parseInt(m[2])) * 20,
+            `Перевод заголовков: ${m[1]}/${m[2]}`);
         }
       });
+
+      if (gen !== _loadGen) return; // отменено новым запросом
 
       // Встраиваем только RU-новости + кандидатов на аналоги
       const ruItems = allNews.filter(n => n.source === 'ru');
@@ -902,16 +932,30 @@ async function fetchAllNews() {
       ];
       await computeEmbeddings(candidates, {
         set textContent(v) {
-          if (v) nc.innerHTML = `<span style="color:#2563eb;font-weight:600">🧠 ${v}</span>`;
+          if (!v || gen !== _loadGen) return;
+          const mPct = v.match(/(\d+)%/);
+          const mBatch = v.match(/(\d+)\/(\d+)/);
+          if (mPct) setProgress(70 + parseInt(mPct[1]) * 0.05, `Загрузка модели: ${mPct[1]}%`);
+          else if (mBatch) setProgress(75 + (parseInt(mBatch[1]) / parseInt(mBatch[2])) * 20,
+            `Семантика: ${mBatch[1]}/${mBatch[2]}`);
+          else setProgress(70, v);
         }
       });
 
+      if (gen !== _loadGen) return;
+
       // Обновляем с семантическими данными
+      setProgress(98, 'Финальная кластеризация...');
       detectAnalogs(allNews);
       clusterRussianNews();
       renderFilters();
       renderClustered();
-    } catch (e) { console.warn('Background semantic upgrade failed:', e); }
+      setProgress(100, 'Готово');
+      setTimeout(hideProgress, 1500);
+    } catch (e) {
+      console.warn('Background semantic upgrade failed:', e);
+      hideProgress();
+    }
   })();
 }
 
