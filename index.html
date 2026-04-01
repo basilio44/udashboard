@@ -713,22 +713,25 @@ function renderSrcClustered() {
     return;
   }
 
+  if (activeCategory === 'all') {
+    document.getElementById("newsList").innerHTML = clusters.map((c, idx) => renderSrcCluster(c, `src-all-${idx}`)).join('');
+    return;
+  }
+
   const byCategory = {};
   for (const c of clusters) {
     if (!byCategory[c.category]) byCategory[c.category] = [];
     byCategory[c.category].push(c);
   }
-  const catsToShow = activeCategory === 'all'
-    ? CATEGORIES.filter(c => c.id !== 'all' && byCategory[c.id]?.length)
-    : CATEGORIES.filter(c => c.id === activeCategory && byCategory[c.id]?.length);
-
-  document.getElementById("newsList").innerHTML = catsToShow.map(cat => {
-    const items = byCategory[cat.id] || [];
-    return `<div class="topic-section">
-      <div class="topic-header"><span>${cat.icon}</span><span>${cat.label}</span><span class="topic-count">${items.length}</span></div>
-      ${items.map((c, idx) => renderSrcCluster(c, `src-${cat.id}-${idx}`)).join('')}
-    </div>`;
-  }).join('');
+  document.getElementById("newsList").innerHTML = CATEGORIES
+    .filter(c => c.id === activeCategory && byCategory[c.id]?.length)
+    .map(cat => {
+      const items = byCategory[cat.id] || [];
+      return `<div class="topic-section">
+        <div class="topic-header"><span>${cat.icon}</span><span>${cat.label}</span><span class="topic-count">${items.length}</span></div>
+        ${items.map((c, idx) => renderSrcCluster(c, `src-${cat.id}-${idx}`)).join('')}
+      </div>`;
+    }).join('');
 }
 
 function renderSrcCluster(c, id) {
@@ -866,23 +869,25 @@ function renderClustered() {
     return;
   }
 
+  if (activeCategory === 'all') {
+    document.getElementById("newsList").innerHTML = clusters.map((c, idx) => renderCluster(c, `all-${idx}`)).join('');
+    return;
+  }
+
   const byCategory = {};
   for (const c of clusters) {
     if (!byCategory[c.category]) byCategory[c.category] = [];
     byCategory[c.category].push(c);
   }
-
-  const catsToShow = activeCategory === 'all'
-    ? CATEGORIES.filter(c => c.id !== 'all' && byCategory[c.id]?.length)
-    : CATEGORIES.filter(c => c.id === activeCategory && byCategory[c.id]?.length);
-
-  document.getElementById("newsList").innerHTML = catsToShow.map(cat => {
-    const items = byCategory[cat.id] || [];
-    return `<div class="topic-section">
-      <div class="topic-header"><span>${cat.icon}</span><span>${cat.label}</span><span class="topic-count">${items.length}</span></div>
-      ${items.map((c, idx) => renderCluster(c, `${cat.id}-${idx}`)).join('')}
-    </div>`;
-  }).join('');
+  document.getElementById("newsList").innerHTML = CATEGORIES
+    .filter(c => c.id === activeCategory && byCategory[c.id]?.length)
+    .map(cat => {
+      const items = byCategory[cat.id] || [];
+      return `<div class="topic-section">
+        <div class="topic-header"><span>${cat.icon}</span><span>${cat.label}</span><span class="topic-count">${items.length}</span></div>
+        ${items.map((c, idx) => renderCluster(c, `${cat.id}-${idx}`)).join('')}
+      </div>`;
+    }).join('');
 }
 
 function renderCluster(c, id) {
