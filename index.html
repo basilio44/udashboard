@@ -186,7 +186,7 @@
           <div class="header-meta">
             <span id="lastUpdated"></span>
             <span class="live-dot pulse-dot"></span>
-            <span>Live · 48 ч · обновление каждые 30 мин</span>
+            <span>Live · обновление каждые 30 мин</span>
           </div>
         </div>
       </div>
@@ -559,7 +559,7 @@ function renderClustered() {
   const modeTag = semanticMode
     ? `<span style="font-size:10px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:6px;padding:1px 7px;font-weight:600;margin-left:6px">🧠 семантика</span>`
     : `<span style="font-size:10px;background:#f1f5f9;color:#64748b;border-radius:6px;padding:1px 7px;margin-left:6px">Jaccard</span>`;
-  document.getElementById("newsCount").innerHTML = `Найдено <span>${clusters.length}</span> историй в российских СМИ <span style="color:#64748b;font-weight:400">· последние 48 ч</span>${modeTag}`;
+  document.getElementById("newsCount").innerHTML = `Найдено <span>${clusters.length}</span> историй в российских СМИ <span style="color:#64748b;font-weight:400">· последние 7 дней</span>${modeTag}`;
 
   if (!clusters.length) {
     document.getElementById("newsList").innerHTML = ruClusters.length === 0
@@ -790,8 +790,8 @@ async function fetchAllNews() {
 
   await Promise.allSettled([...rssTasks, ...tgTasks]);
 
-  // Filter: last 48 hours only
-  const cutoff = new Date(); cutoff.setHours(cutoff.getHours() - 48);
+  // Filter: last 7 days only
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
 
   const processed = rawItems
     .filter(item => {
@@ -864,7 +864,7 @@ function getFilteredNews() {
 
 function renderNews() {
   const filtered = getFilteredNews();
-  document.getElementById("newsCount").innerHTML = `Показано <span>${filtered.length}</span> новостей <span style="color:#64748b;font-weight:400">· последние 48 ч</span>`;
+  document.getElementById("newsCount").innerHTML = `Показано <span>${filtered.length}</span> новостей <span style="color:#64748b;font-weight:400">· последние 7 дней</span>`;
 
   if (!filtered.length) {
     document.getElementById("newsList").innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><div class="title">Нет новостей по выбранным фильтрам</div><div class="sub">Попробуйте изменить категорию или источник</div></div>`;
