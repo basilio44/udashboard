@@ -138,6 +138,18 @@
   .cluster-expand-item b { font-weight: 600; white-space: nowrap; }
   .cluster-expand-sep { font-size: 10px; font-weight: 600; color: #94a3b8; padding: 4px 0 2px; text-transform: uppercase; letter-spacing: .5px; }
 
+  /* Loading source grid */
+  .loading-phase { font-size: 13px; font-weight: 600; color: #1e293b; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .loading-source-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .src-chip { font-size: 11px; padding: 4px 10px; border-radius: 8px; display: inline-flex; align-items: center; gap: 5px; font-weight: 500; transition: all .2s; }
+  .src-chip-wait    { background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; }
+  .src-chip-loading { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+  .src-chip-ok      { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+  .src-chip-err     { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+  .mini-spin { width: 10px; height: 10px; border: 2px solid #bfdbfe; border-top-color: #2563eb; border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; flex-shrink: 0; }
+  .progress-bar-wrap { height: 4px; background: #e2e8f0; border-radius: 2px; margin-bottom: 14px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #2563eb, #60a5fa); border-radius: 2px; transition: width .3s; }
+
   /* Sentiment */
   .sentiment-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
   .sent-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; border: 1px solid; }
@@ -760,32 +772,63 @@ async function translateAllNews(items, statusEl) {
 async function fetchAllNews() {
   const btn = document.getElementById("refreshBtn");
   const bar = document.getElementById("loadingBar");
-  const status = document.getElementById("loadingStatus");
+  bar.style.display = "none"; // hide old bar — progress shown inline
   btn.disabled = true;
-  bar.style.display = "flex";
 
-  const total = RSS_FEEDS.length + TG_CHANNELS.length;
-  let loaded = 0, errors = 0;
+  const allSources = [
+    ...RSS_FEEDS.map(f => ({ key: f.sourceLabel, label: f.sourceLabel, type: 'rss', data: f })),
+    ...TG_CHANNELS.map(ch => ({ key: ch.sourceLabel, label: `${ch.sourceLabel}`, type: 'tg', data: ch })),
+  ];
+  const total = allSources.length;
+  const srcStatus = {}; // label -> 'loading' | 'ok' | 'err'
+  allSources.forEach(s => srcStatus[s.key] = 'loading');
+  let loaded = 0;
   const rawItems = [];
 
-  const update = () => { status.textContent = `Загружено: ${loaded}/${total}${errors ? ` (ошибок: ${errors})` : ""}`; };
+  function renderProgress(phase) {
+    const done = Object.values(srcStatus).filter(s => s !== 'loading').length;
+    const errCount = Object.values(srcStatus).filter(s => s === 'err').length;
+    const pct = Math.round(done / total * 100);
 
-  // RSS feeds
+    document.getElementById("newsCount").innerHTML =
+      phase
+        ? `<span style="color:#2563eb;font-weight:600">${phase}</span>`
+        : `Загружено источников: <span>${done}/${total}</span>${errCount ? ` · ошибок: ${errCount}` : ''}`;
+
+    document.getElementById("newsList").innerHTML = `
+      <div style="padding:8px 0 20px">
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${phase ? 100 : pct}%"></div></div>
+        ${phase ? `<div class="loading-phase"><div class="spinner"></div>${phase}</div>` : ''}
+        <div class="loading-source-grid">
+          ${allSources.map(s => {
+            const st = srcStatus[s.key];
+            return `<span class="src-chip src-chip-${st}">
+              ${st === 'loading' ? '<span class="mini-spin"></span>' : st === 'ok' ? '✓' : '✗'}
+              ${escHtml(s.label)}
+            </span>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  renderProgress();
+
   const rssTasks = RSS_FEEDS.map(async f => {
     try {
       const xml = await fetchWithProxy(f.url);
       parseRSS(xml).forEach(item => rawItems.push({ ...item, feedSource: f.source, feedSourceLabel: f.sourceLabel, feedCategory: null }));
-    } catch { errors++; }
-    loaded++; update();
+      srcStatus[f.sourceLabel] = 'ok';
+    } catch { srcStatus[f.sourceLabel] = 'err'; }
+    loaded++; renderProgress();
   });
 
-  // Telegram channels
   const tgTasks = TG_CHANNELS.map(async ch => {
     try {
       const html = await fetchWithProxy(`https://t.me/s/${ch.channel}`);
       parseTelegram(html).forEach(item => rawItems.push({ ...item, feedSource: ch.source, feedSourceLabel: ch.sourceLabel, feedCategory: null }));
-    } catch { errors++; }
-    loaded++; update();
+      srcStatus[ch.sourceLabel] = 'ok';
+    } catch { srcStatus[ch.sourceLabel] = 'err'; }
+    loaded++; renderProgress();
   });
 
   await Promise.allSettled([...rssTasks, ...tgTasks]);
@@ -829,15 +872,18 @@ async function fetchAllNews() {
   document.getElementById("lastUpdated").textContent = `Обновлено: ${new Date().toLocaleTimeString("ru-RU", { hour:"2-digit", minute:"2-digit" })}`;
   btn.disabled = false;
 
-  // Translate non-Russian items, then cluster and render
-  const loadingP = bar.querySelector("p");
-  if (loadingP) loadingP.textContent = "Перевод источников...";
-  await translateAllNews(allNews, status);
-  if (loadingP) loadingP.textContent = "Семантический анализ...";
-  await computeEmbeddings(allNews, status);
+  renderProgress('Перевод заголовков...');
+  await translateAllNews(allNews, { textContent: '' });
+
+  renderProgress('Загрузка модели семантики...');
+  await computeEmbeddings(allNews, {
+    set textContent(v) { if (v) renderProgress(v); }
+  });
+
+  renderProgress('Кластеризация и анализ тональности...');
   detectAnalogs(allNews);
   clusterRussianNews();
-  bar.style.display = "none";
+
   renderFilters();
   renderClustered();
 }
