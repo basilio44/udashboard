@@ -182,6 +182,16 @@
   .ru-analog-item:hover { background: #eff6ff; color: #1e40af; }
   .ru-section-block { margin-bottom: 20px; }
 
+  /* Region tabs */
+  .region-tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 0 4px; border-bottom: 1px solid #e2e8f0; margin-bottom: 0; }
+  .region-tab { padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; transition: all .15s; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+  .region-tab:hover { background: #f8fafc; }
+  .region-tab.active { color: #fff; border-color: transparent; }
+  .region-tab-desc { font-size: 10px; color: #94a3b8; margin-left: 4px; font-weight: 400; }
+
+  /* Reverse cluster cards */
+  .rev-source-chip { font-size: 10px; padding: 2px 7px; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; border-radius: 6px; font-weight: 500; }
+
   /* Hide */
   .hidden { display: none !important; }
 </style>
@@ -205,6 +215,7 @@
       </div>
       <button class="refresh-btn" id="refreshBtn" onclick="fetchAllNews()">🔄 Обновить</button>
     </div>
+    <div class="region-tabs" id="regionTabs"></div>
   </div>
 </div>
 
@@ -220,7 +231,7 @@
   <div id="newsTab">
     <div class="filter-bar">
       <div class="filter-row">
-        <input type="text" class="search-input" id="searchInput" placeholder="Поиск по новостям..." oninput="renderClustered()">
+        <input type="text" class="search-input" id="searchInput" placeholder="Поиск по новостям..." oninput="renderCurrentTab()">
         <button class="expand-btn" id="expandBtn" onclick="toggleExpandAll()">Развернуть все</button>
       </div>
       <div class="filter-row" id="categoryFilters"></div>
@@ -335,9 +346,20 @@ const CAT_KEYWORDS = {
 // ====== STATE ======
 let allNews = [];
 let ruClusters = [];
+let srcClusters = [];
 let activeCategory = "all";
+let activeRegionTab = 'ru'; // 'ru' | 'ua' | 'eu' | 'us' | 'ar' | 'jp'
 const newsEmbeddings = new Map(); // item.id → number[]
 let _loadGen = 0; // cancel stale background operations
+
+const REGION_TABS = [
+  { id: 'ru', label: 'Россия',      flag: '🇷🇺', color: '#d52b1e', desc: 'РФ → мир' },
+  { id: 'ua', label: 'Украина',     flag: '🇺🇦', color: '#005bbb', desc: 'UA → РФ' },
+  { id: 'eu', label: 'Европа',      flag: '🇪🇺', color: '#003399', desc: 'EU → РФ' },
+  { id: 'us', label: 'США',         flag: '🇺🇸', color: '#3c3b6e', desc: 'US → РФ' },
+  { id: 'ar', label: 'Арабский мир',flag: '🇶🇦', color: '#8b5e00', desc: 'AR → РФ' },
+  { id: 'jp', label: 'Япония',      flag: '🇯🇵', color: '#be123c', desc: 'JP → РФ' },
+];
 
 function setProgress(pct, text) {
   const el = document.getElementById('loadProgress');
@@ -589,6 +611,209 @@ function clusterRussianNews() {
   }
 
   ruClusters = clusters.sort((a, b) => b.ruSources.length - a.ruSources.length || b.rawDate - a.rawDate);
+}
+
+// ====== REVERSE CLUSTERING (source → RU) ======
+function clusterSourceNews(source) {
+  const srcNews = allNews.filter(n => n.source === source);
+  const ruNews  = allNews.filter(n => n.source === 'ru');
+  const used = new Set();
+  const clusters = [];
+
+  for (let i = 0; i < srcNews.length; i++) {
+    if (used.has(i)) continue;
+    const group = [srcNews[i]];
+    used.add(i);
+    for (let j = i + 1; j < srcNews.length; j++) {
+      if (used.has(j)) continue;
+      if (getSim(srcNews[i].id, srcNews[i].title, srcNews[j].id, srcNews[j].title) >= CLUSTER_THRESH()) { group.push(srcNews[j]); used.add(j); }
+    }
+    const sorted = [...group].sort((a, b) => b.rawDate - a.rawDate);
+    const title = sorted[0].title;
+    const link  = sorted[0].link;
+    const date  = sorted[0].date;
+    const rawDate = sorted[0].rawDate;
+    const category = detectCategory(group.map(g => g.title).join(' '), '');
+
+    const seenLabels = new Set();
+    const srcSources = [];
+    for (const n of sorted) {
+      if (!seenLabels.has(n.sourceLabel)) { seenLabels.add(n.sourceLabel); srcSources.push(n); }
+    }
+
+    // Find RU analogs
+    const refId = sorted[0].id;
+    const analogs = [];
+    for (const ru of ruNews) {
+      const sim = getSim(refId, title, ru.id, ru.title);
+      if (sim >= ANALOG_THRESH()) analogs.push({ item: ru, sim });
+    }
+    analogs.sort((a, b) => b.sim - a.sim);
+    const analogItems = analogs.slice(0, 8).map(a => a.item);
+    const seenRu = new Set();
+    const ruSourcesList = [];
+    for (const n of analogItems) {
+      if (!seenRu.has(n.sourceLabel)) { seenRu.add(n.sourceLabel); ruSourcesList.push(n); }
+    }
+
+    const srcSentiment = aggregateSentiment(srcSources.map(n => n.title + ' ' + (n.description || '')));
+    const ruSentiment  = analogItems.length ? aggregateSentiment(analogItems.map(n => n.title + ' ' + (n.description || ''))) : null;
+    const sentConflict = ruSentiment && srcSentiment !== 'neutral' && ruSentiment !== 'neutral' && srcSentiment !== ruSentiment;
+
+    clusters.push({ title, link, date, rawDate, category, srcSources, analogItems, ruSourcesList, hasAnalog: analogItems.length > 0, srcSentiment, ruSentiment, sentConflict, source });
+  }
+
+  srcClusters = clusters.sort((a, b) => b.ruSourcesList.length - a.ruSourcesList.length || b.rawDate - a.rawDate);
+}
+
+function renderSrcClustered() {
+  const tab = REGION_TABS.find(t => t.id === activeRegionTab);
+  const q = (document.getElementById("searchInput")?.value || '').toLowerCase();
+  let clusters = srcClusters;
+  if (activeCategory !== 'all') clusters = clusters.filter(c => c.category === activeCategory);
+  if (q) clusters = clusters.filter(c => c.title.toLowerCase().includes(q));
+
+  document.getElementById("newsCount").innerHTML =
+    `Найдено <span>${clusters.length}</span> историй · ${tab.flag} ${tab.label} → 🇷🇺 Россия <span style="color:#64748b;font-weight:400">· последние 7 дней</span>`;
+
+  if (!clusters.length) {
+    document.getElementById("newsList").innerHTML = srcClusters.length === 0
+      ? `<div class="empty-state"><div class="icon">📡</div><div class="title">Нет новостей из ${tab.label}</div></div>`
+      : `<div class="empty-state"><div class="icon">⚠️</div><div class="title">Нет историй по выбранным фильтрам</div></div>`;
+    return;
+  }
+
+  const byCategory = {};
+  for (const c of clusters) {
+    if (!byCategory[c.category]) byCategory[c.category] = [];
+    byCategory[c.category].push(c);
+  }
+  const catsToShow = activeCategory === 'all'
+    ? CATEGORIES.filter(c => c.id !== 'all' && byCategory[c.id]?.length)
+    : CATEGORIES.filter(c => c.id === activeCategory && byCategory[c.id]?.length);
+
+  document.getElementById("newsList").innerHTML = catsToShow.map(cat => {
+    const items = byCategory[cat.id] || [];
+    return `<div class="topic-section">
+      <div class="topic-header"><span>${cat.icon}</span><span>${cat.label}</span><span class="topic-count">${items.length}</span></div>
+      ${items.map((c, idx) => renderSrcCluster(c, `src-${cat.id}-${idx}`)).join('')}
+    </div>`;
+  }).join('');
+}
+
+function renderSrcCluster(c, id) {
+  const tab = REGION_TABS.find(t => t.id === c.source);
+  const expanded = allExpanded || expandedSet.has(id);
+  const srcCount = c.srcSources.length;
+  const srcWord = srcCount === 1 ? 'источник' : srcCount < 5 ? 'источника' : 'источников';
+  const ruCount = c.ruSourcesList.length;
+
+  const ruRow = ruCount > 0
+    ? c.ruSourcesList.map(n => `<span class="ru-source-chip">${escHtml(n.sourceLabel)}</span>`).join('')
+    : '<span class="analog-badge analog-unique">⚠ Не найдено в российских СМИ</span>';
+
+  const expandContent = expanded ? `<div class="cluster-expand">
+    <div class="cluster-expand-sep">${tab.flag} ${tab.label} (${c.srcSources.length})</div>
+    ${c.srcSources.map(n => {
+      const s = aggregateSentiment([n.title + ' ' + (n.description || '')]);
+      return `<div class="cluster-expand-item" onclick="window.open('${escHtml(n.link)}','_blank')">
+        <span>${tab.flag}</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <b>${escHtml(n.sourceLabel)}</b>
+            <span class="sent-badge sent-${s}" style="font-size:9px;padding:1px 5px">${SENT_LABEL[s]}</span>
+          </div>
+          <div style="margin-top:2px;opacity:.85">${escHtml(n.title)}</div>
+        </div>
+      </div>`;
+    }).join('')}
+    ${c.analogItems.length ? `<div class="cluster-expand-sep">🇷🇺 Эта же новость в российских СМИ (${c.analogItems.length})</div>
+    ${c.analogItems.map(n => {
+      const s = aggregateSentiment([n.title + ' ' + (n.description || '')]);
+      return `<div class="cluster-expand-item" onclick="window.open('${escHtml(n.link)}','_blank')">
+        <span>🇷🇺</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <b>${escHtml(n.sourceLabel)}</b>
+            <span class="sent-badge sent-${s}" style="font-size:9px;padding:1px 5px">${SENT_LABEL[s]}</span>
+          </div>
+          <div style="margin-top:2px;opacity:.85">${escHtml(n.title)}</div>
+        </div>
+      </div>`;
+    }).join('')}` : ''}
+  </div>` : '';
+
+  return `<div class="cluster-card">
+    <div class="cluster-header" onclick="toggleSrcCluster('${id}')">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <div class="cluster-title">${escHtml(c.title)}</div>
+          <span style="font-size:10px;color:#94a3b8;white-space:nowrap">⏰ ${c.date}</span>
+        </div>
+        <div class="ru-sources-row">
+          <span style="font-size:11px;background:${tab.color};color:#fff;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">${tab.flag} ${srcCount} ${srcWord}</span>
+          ${c.srcSources.map(n => `<span class="rev-source-chip">${escHtml(n.sourceLabel)}</span>`).join('')}
+        </div>
+        <div class="world-row">
+          ${ruCount > 0
+            ? `<span style="font-size:11px;background:#fef2f2;color:#991b1b;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">🇷🇺 ${ruCount} РФ</span> ${ruRow}`
+            : ruRow}
+        </div>
+        <div class="sentiment-row">
+          <span class="sent-badge sent-${c.srcSentiment}" title="Тональность ${tab.label}">${tab.flag} ${SENT_LABEL[c.srcSentiment]}</span>
+          ${c.ruSentiment ? `<span class="sent-divider">·</span><span class="sent-badge sent-${c.ruSentiment}" title="Тональность РФ">🇷🇺 ${SENT_LABEL[c.ruSentiment]}</span>` : ''}
+          ${c.sentConflict ? `<span class="sent-conflict">⚡ расхождение</span>` : ''}
+        </div>
+      </div>
+      <span class="toggle-arrow" style="flex-shrink:0;margin-top:2px">${expanded ? '▲' : '▼'}</span>
+    </div>
+    ${expandContent}
+  </div>`;
+}
+
+function toggleSrcCluster(id) {
+  if (expandedSet.has(id)) expandedSet.delete(id); else expandedSet.add(id);
+  renderSrcClustered();
+}
+
+function renderCurrentTab() {
+  if (activeRegionTab === 'ru') {
+    renderFilters();
+    renderClustered();
+  } else {
+    renderFilters();
+    renderSrcClustered();
+  }
+}
+
+function setRegionTab(tabId) {
+  activeRegionTab = tabId;
+  activeCategory = 'all';
+  expandedSet.clear();
+  allExpanded = false;
+  renderRegionTabs();
+  if (tabId === 'ru') {
+    renderFilters();
+    renderClustered();
+  } else {
+    clusterSourceNews(tabId);
+    renderFilters();
+    renderSrcClustered();
+  }
+}
+
+function renderRegionTabs() {
+  document.getElementById('regionTabs').innerHTML = REGION_TABS.map(t => {
+    const count = t.id === 'ru' ? ruClusters.length : allNews.filter(n => n.source === t.id).length;
+    const active = activeRegionTab === t.id;
+    return `<button class="region-tab${active ? ' active' : ''}"
+      style="${active ? `background:${t.color};border-color:${t.color}` : ''}"
+      onclick="setRegionTab('${t.id}')">
+      ${t.flag} ${t.label}
+      <span style="font-size:10px;padding:1px 6px;border-radius:6px;background:${active ? 'rgba(255,255,255,.25)' : '#f1f5f9'};color:${active ? '#fff' : '#64748b'}">${count}</span>
+      <span class="region-tab-desc">${t.desc}</span>
+    </button>`;
+  }).join('');
 }
 
 function renderClustered() {
@@ -909,8 +1134,8 @@ async function fetchAllNews() {
   setProgress(50, 'Кластеризация...');
   detectAnalogs(allNews);
   clusterRussianNews();
-  renderFilters();
-  renderClustered();
+  renderRegionTabs();
+  renderCurrentTab();
 
   // === ФОНОВОЕ УЛУЧШЕНИЕ: перевод + семантика ===
   (async () => {
@@ -952,8 +1177,9 @@ async function fetchAllNews() {
       setProgress(98, 'Финальная кластеризация...');
       detectAnalogs(allNews);
       clusterRussianNews();
-      renderFilters();
-      renderClustered();
+      if (activeRegionTab !== 'ru') clusterSourceNews(activeRegionTab);
+      renderRegionTabs();
+      renderCurrentTab();
       setProgress(100, 'Готово');
       setTimeout(hideProgress, 1500);
     } catch (e) {
@@ -966,7 +1192,9 @@ async function fetchAllNews() {
 // ====== RENDERING ======
 function renderFilters() {
   const catCounts = { all: ruClusters.length };
-  CATEGORIES.forEach(c => { if (c.id !== 'all') catCounts[c.id] = ruClusters.filter(cl => cl.category === c.id).length; });
+  const clusters = activeRegionTab === 'ru' ? ruClusters : srcClusters;
+  CATEGORIES.forEach(c => { if (c.id !== 'all') catCounts[c.id] = clusters.filter(cl => cl.category === c.id).length; });
+  catCounts.all = clusters.length;
 
   document.getElementById("categoryFilters").innerHTML = CATEGORIES.map(c =>
     `<button class="filter-btn ${activeCategory === c.id ? 'active' : ''}" style="${activeCategory === c.id ? `background:${c.color};color:#fff;border-color:${c.color}` : ''}" onclick="setCategory('${c.id}')">${c.icon} ${c.label} <span class="filter-count">${catCounts[c.id] || 0}</span></button>`
@@ -1030,11 +1258,11 @@ function toggleExpandAll() {
   allExpanded = !allExpanded;
   expandedSet.clear();
   document.getElementById("expandBtn").textContent = allExpanded ? "Свернуть все" : "Развернуть все";
-  renderClustered();
+  renderCurrentTab();
 }
 
-function setCategory(id) { activeCategory = id; renderFilters(); renderClustered(); }
-function setSource(id) { activeSource = id; renderFilters(); renderClustered(); }
+function setCategory(id) { activeCategory = id; renderFilters(); renderCurrentTab(); }
+function setSource(id)   { activeSource = id;   renderFilters(); renderCurrentTab(); }
 
 
 // ====== INIT ======
