@@ -707,6 +707,7 @@ function renderSrcCluster(c, id) {
   const srcCount = c.srcSources.length;
   const srcWord = srcCount === 1 ? 'источник' : srcCount < 5 ? 'источника' : 'источников';
   const ruCount = c.ruSourcesList.length;
+  const cat = CATEGORIES.find(cat => cat.id === c.category) || CATEGORIES[1];
 
   const ruRow = ruCount > 0
     ? c.ruSourcesList.map(n => `<span class="ru-source-chip">${escHtml(n.sourceLabel)}</span>`).join('')
@@ -749,6 +750,7 @@ function renderSrcCluster(c, id) {
         <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
           <div class="cluster-title">${escHtml(c.title)}</div>
           <span style="font-size:10px;color:#94a3b8;white-space:nowrap">⏰ ${c.date}</span>
+          <span style="font-size:10px;padding:1px 7px;border-radius:6px;font-weight:600;white-space:nowrap;background:${cat.color}18;color:${cat.color};border:1px solid ${cat.color}30">${cat.icon} ${cat.label}</span>
         </div>
         <div class="ru-sources-row">
           <span style="font-size:11px;background:${tab.color};color:#fff;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">${tab.flag} ${srcCount} ${srcWord}</span>
@@ -857,6 +859,7 @@ function renderCluster(c, id) {
   const expanded = allExpanded || expandedSet.has(id);
   const ruCount = c.ruSources.length;
   const ruWord = ruCount === 1 ? 'источник' : ruCount < 5 ? 'источника' : 'источников';
+  const cat = CATEGORIES.find(cat => cat.id === c.category) || CATEGORIES[1];
 
   const worldRow = c.hasAnalog
     ? c.analogSources.map(s => {
@@ -904,6 +907,7 @@ function renderCluster(c, id) {
         <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
           <div class="cluster-title">${escHtml(c.title)}</div>
           <span style="font-size:10px;color:#94a3b8;white-space:nowrap;flex-shrink:0">⏰ ${c.date}</span>
+          <span style="font-size:10px;padding:1px 7px;border-radius:6px;font-weight:600;white-space:nowrap;background:${cat.color}18;color:${cat.color};border:1px solid ${cat.color}30">${cat.icon} ${cat.label}</span>
         </div>
         <div class="ru-sources-row">
           <span style="font-size:11px;background:#ef4444;color:#fff;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">🇷🇺 ${ruCount} ${ruWord}</span>
