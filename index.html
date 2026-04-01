@@ -753,9 +753,10 @@ function renderSrcCluster(c, id) {
       return `<div class="cluster-expand-item" onclick="window.open('${escHtml(n.link)}','_blank')">
         <span>${tab.flag}</span>
         <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:6px">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <b>${escHtml(n.sourceLabel)}</b>
             <span class="sent-badge sent-${s}" style="font-size:9px;padding:1px 5px">${SENT_LABEL[s]}</span>
+            ${translateLink(n.link)}
           </div>
           <div style="margin-top:2px;opacity:.85">${escHtml(n.title)}</div>
         </div>
@@ -926,9 +927,10 @@ function renderCluster(c, id) {
       return `<div class="cluster-expand-item" onclick="window.open('${escHtml(n.link)}','_blank')">
         <span>${m.flag}</span>
         <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:6px">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <b>${escHtml(n.sourceLabel)}</b>
             <span class="sent-badge sent-${s}" style="font-size:9px;padding:1px 5px">${SENT_LABEL[s]}</span>
+            ${translateLink(n.link)}
           </div>
           <div style="margin-top:2px;opacity:.85">${escHtml(n.title)}</div>
         </div>
@@ -1287,6 +1289,13 @@ function renderNews() {
 }
 
 function escHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+function translateLink(url) {
+  if (!url) return '';
+  const href = `https://translate.google.com/translate?sl=auto&tl=ru&u=${encodeURIComponent(url)}`;
+  return `<a href="${href}" target="_blank" rel="noopener" onclick="event.stopPropagation()"
+    style="font-size:9px;color:#2563eb;text-decoration:none;border:1px solid #bfdbfe;padding:1px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0">🔤 RU</a>`;
+}
 
 function toggleNews(id) {
   if (expandedSet.has(id)) expandedSet.delete(id); else expandedSet.add(id);
