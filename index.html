@@ -45,15 +45,17 @@
   .stat-sub { font-size: 11px; color: #94a3b8; }
 
   /* Filter bar */
-  .filter-bar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-  .filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .filter-bar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+  .filter-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .search-input { flex: 1; max-width: 320px; padding: 8px 12px 8px 34px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; outline: none; transition: .2s; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") 10px center no-repeat; }
   .search-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
-  .filter-btn { padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; transition: all .15s; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
-  .filter-btn:hover { background: #f8fafc; }
-  .filter-btn.active { color: #fff; border-color: transparent; }
-  .filter-count { font-size: 10px; padding: 1px 5px; border-radius: 6px; background: rgba(255,255,255,.2); }
-  .expand-btn { padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; border: none; background: #f1f5f9; color: #475569; cursor: pointer; }
+  .filter-btn { padding: 4px 2px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; transition: color .15s; white-space: nowrap; display: flex; align-items: center; gap: 4px; color: #64748b; text-decoration: none; }
+  .filter-btn:hover { color: #1e293b; }
+  .filter-btn.active { color: #1e293b; font-weight: 700; }
+  .filter-count { font-size: 11px; color: #94a3b8; font-weight: 400; }
+  .filter-btn.active .filter-count { color: #64748b; }
+  .filter-sep { color: #cbd5e1; font-size: 12px; user-select: none; }
+  .expand-btn { padding: 1px 8px; border-radius: 6px; font-size: 11px; font-weight: 500; border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; cursor: pointer; white-space: nowrap; }
   .expand-btn:hover { background: #e2e8f0; }
   .refresh-btn { padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; border: none; background: #f1f5f9; color: #475569; cursor: pointer; display: flex; align-items: center; gap: 5px; }
   .refresh-btn:hover { background: #e2e8f0; }
@@ -97,8 +99,9 @@
   .footer p { font-size: 11px; color: #94a3b8; }
 
   /* Counts */
-  .news-count { font-size: 12px; color: #64748b; margin-bottom: 12px; }
+  .news-count { font-size: 12px; color: #64748b; margin-bottom: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
   .news-count span { font-weight: 600; color: #1e293b; }
+  body.dark .news-count span { color: #f1f5f9; }
 
   /* Cross-source comparison */
   .comparisons-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
@@ -212,10 +215,12 @@
   body.dark .stat-value { color: #f1f5f9; }
   body.dark .stat-sub { color: #475569; }
 
-  body.dark .filter-btn { background: #1e293b; border-color: #334155; color: #cbd5e1; }
-  body.dark .filter-btn:hover { background: #334155; }
-  body.dark .filter-btn.active { color: #fff; }
-  body.dark .expand-btn { background: #334155; color: #cbd5e1; }
+  body.dark .filter-sep { color: #334155; }
+  body.dark .filter-btn { color: #64748b; }
+  body.dark .filter-btn:hover { color: #e2e8f0; }
+  body.dark .filter-btn.active { color: #e2e8f0; }
+  body.dark .filter-btn.active .filter-count { color: #94a3b8; }
+  body.dark .expand-btn { background: #334155; border-color: #475569; color: #94a3b8; }
   body.dark .expand-btn:hover { background: #475569; }
   body.dark .refresh-btn { background: #334155; color: #cbd5e1; }
   body.dark .refresh-btn:hover { background: #475569; }
@@ -328,10 +333,6 @@
   <!-- NEWS TAB -->
   <div id="newsTab">
     <div class="filter-bar">
-      <div class="filter-row">
-        <input type="text" class="search-input" id="searchInput" placeholder="Поиск по новостям..." oninput="renderCurrentTab()">
-        <button class="expand-btn" id="expandBtn" onclick="toggleExpandAll()">Развернуть все</button>
-      </div>
       <div class="filter-row" id="categoryFilters"></div>
     </div>
     <div class="news-count" id="newsCount"></div>
@@ -820,13 +821,11 @@ function clusterSourceNews(source) {
 
 function renderSrcClustered() {
   const tab = REGION_TABS.find(t => t.id === activeRegionTab);
-  const q = (document.getElementById("searchInput")?.value || '').toLowerCase();
   let clusters = srcClusters;
   if (activeCategory !== 'all') clusters = clusters.filter(c => c.category === activeCategory);
-  if (q) clusters = clusters.filter(c => c.title.toLowerCase().includes(q));
 
   document.getElementById("newsCount").innerHTML =
-    `Найдено <span>${clusters.length}</span> историй · ${tab.flag} ${tab.label} → 🇷🇺 Россия <span style="color:#64748b;font-weight:400">· последние 7 дней</span>`;
+    `Найдено <span>${clusters.length}</span> историй · ${tab.flag} ${tab.label} → 🇷🇺 Россия <span style="color:#64748b;font-weight:400">· последние 7 дней</span><button class="expand-btn" id="expandBtn" onclick="toggleExpandAll()" style="margin-left:10px">Развернуть все</button>`;
 
   if (!clusters.length) {
     document.getElementById("newsList").innerHTML = srcClusters.length === 0
@@ -975,15 +974,13 @@ function renderRegionTabs() {
 }
 
 function renderClustered() {
-  const q = (document.getElementById("searchInput")?.value || '').toLowerCase();
   let clusters = ruClusters;
   if (activeCategory !== 'all') clusters = clusters.filter(c => c.category === activeCategory);
-  if (q) clusters = clusters.filter(c => c.title.toLowerCase().includes(q));
 
   const modeTag = semanticMode
     ? `<span style="font-size:10px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:6px;padding:1px 7px;font-weight:600;margin-left:6px">🧠 семантика</span>`
     : `<span style="font-size:10px;background:#f1f5f9;color:#64748b;border-radius:6px;padding:1px 7px;margin-left:6px">Jaccard</span>`;
-  document.getElementById("newsCount").innerHTML = `Найдено <span>${clusters.length}</span> историй в российских СМИ <span style="color:#64748b;font-weight:400">· последние 7 дней</span>${modeTag}`;
+  document.getElementById("newsCount").innerHTML = `Найдено <span>${clusters.length}</span> историй в российских СМИ <span style="color:#64748b;font-weight:400">· последние 7 дней</span>${modeTag}<button class="expand-btn" id="expandBtn" onclick="toggleExpandAll()" style="margin-left:10px">Развернуть все</button>`;
 
   if (!clusters.length) {
     document.getElementById("newsList").innerHTML = ruClusters.length === 0
@@ -1359,24 +1356,23 @@ function renderFilters() {
   CATEGORIES.forEach(c => { if (c.id !== 'all') catCounts[c.id] = clusters.filter(cl => cl.category === c.id).length; });
   catCounts.all = clusters.length;
 
-  document.getElementById("categoryFilters").innerHTML = CATEGORIES.map(c =>
-    `<button class="filter-btn ${activeCategory === c.id ? 'active' : ''}" style="${activeCategory === c.id ? `background:${c.color};color:#fff;border-color:${c.color}` : ''}" onclick="setCategory('${c.id}')">${c.icon} ${c.label} <span class="filter-count">${catCounts[c.id] || 0}</span></button>`
-  ).join("");
+  document.getElementById("categoryFilters").innerHTML =
+    CATEGORIES.map((c, i) =>
+      `${i > 0 ? '<span class="filter-sep">·</span>' : ''}<button class="filter-btn ${activeCategory === c.id ? 'active' : ''}" onclick="setCategory('${c.id}')">${c.icon} ${c.label} <span class="filter-count">${catCounts[c.id] || 0}</span></button>`
+    ).join("");
 }
 
 function getFilteredNews() {
-  const q = document.getElementById("searchInput").value.toLowerCase();
   return allNews.filter(n => {
     if (activeCategory !== "all" && n.category !== activeCategory) return false;
     if (activeSource !== "all" && n.source !== activeSource) return false;
-    if (q && !n.title.toLowerCase().includes(q) && !n.description.toLowerCase().includes(q)) return false;
     return true;
   });
 }
 
 function renderNews() {
   const filtered = getFilteredNews();
-  document.getElementById("newsCount").innerHTML = `Показано <span>${filtered.length}</span> новостей <span style="color:#64748b;font-weight:400">· последние 7 дней</span>`;
+  document.getElementById("newsCount").innerHTML = `Показано <span>${filtered.length}</span> новостей <span style="color:#64748b;font-weight:400">· последние 7 дней</span><button class="expand-btn" id="expandBtn" onclick="toggleExpandAll()" style="margin-left:10px">Развернуть все</button>`;
 
   if (!filtered.length) {
     document.getElementById("newsList").innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><div class="title">Нет новостей по выбранным фильтрам</div><div class="sub">Попробуйте изменить категорию или источник</div></div>`;
