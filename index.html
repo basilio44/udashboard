@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Медиамонитор</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: linear-gradient(135deg, #f8fafc, #f1f5f9, #eff6ff); min-height: 100vh; color: #1e293b; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+  /* Animations */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fade-in { animation: fadeIn .3s ease-out; }
+  .pulse-dot { animation: pulse 2s ease-in-out infinite; }
+  .spinner { border: 3px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin .7s linear infinite; display: inline-block; }
+
+  /* Layout */
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+
+  /* Header */
+  .header { background: #fff; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 50; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .header-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 0; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 40px; height: 40px; background: linear-gradient(135deg, #2563eb, #facc15); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .header-title { font-size: 18px; font-weight: 700; }
+  .header-meta { font-size: 11px; color: #64748b; display: flex; align-items: center; gap: 8px; }
+  .live-dot { width: 7px; height: 7px; background: #22c55e; border-radius: 50%; display: inline-block; }
+
+
+  /* Stats Grid */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+  @media (max-width: 768px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+  .stat-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); display: flex; align-items: center; gap: 12px; }
+  .stat-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .stat-label { font-size: 11px; color: #64748b; font-weight: 500; }
+  .stat-value { font-size: 18px; font-weight: 700; }
+  .stat-sub { font-size: 11px; color: #94a3b8; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .search-input { flex: 1; max-width: 320px; padding: 8px 12px 8px 34px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 13px; outline: none; transition: .2s; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") 10px center no-repeat; }
+  .search-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+  .filter-btn { padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; transition: all .15s; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+  .filter-btn:hover { background: #f8fafc; }
+  .filter-btn.active { color: #fff; border-color: transparent; }
+  .filter-count { font-size: 10px; padding: 1px 5px; border-radius: 6px; background: rgba(255,255,255,.2); }
+  .expand-btn { padding: 8px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; border: none; background: #f1f5f9; color: #475569; cursor: pointer; }
+  .expand-btn:hover { background: #e2e8f0; }
+  .refresh-btn { padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; border: none; background: #f1f5f9; color: #475569; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+  .refresh-btn:hover { background: #e2e8f0; }
+  .refresh-btn:disabled { opacity: .5; }
+
+  /* News cards */
+  .news-list { display: flex; flex-direction: column; gap: 8px; }
+  .news-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: box-shadow .2s; }
+  .news-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+  .news-header { padding: 14px 16px; cursor: pointer; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .news-left { display: flex; align-items: flex-start; gap: 12px; flex: 1; min-width: 0; }
+  .news-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .news-title { font-size: 13px; font-weight: 600; line-height: 1.4; color: #1e293b; }
+  .news-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .news-date { font-size: 11px; color: #94a3b8; }
+  .news-source-badge { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-weight: 500; }
+  .impact-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 500; border: 1px solid; }
+  .impact-high { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+  .impact-medium { background: #fffbeb; color: #d97706; border-color: #fed7aa; }
+  .impact-low { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+  .toggle-arrow { color: #94a3b8; font-size: 12px; margin-top: 4px; flex-shrink: 0; }
+  .news-body { padding: 0 16px 14px; border-top: 1px solid #f1f5f9; margin-top: 0; padding-top: 12px; }
+  .news-body p { font-size: 13px; color: #475569; line-height: 1.6; }
+  .news-body a { color: #2563eb; font-size: 12px; font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; }
+  .news-body a:hover { color: #1d4ed8; }
+
+
+  /* Loading overlay */
+  .loading-bar { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .loading-bar p { font-size: 13px; font-weight: 500; color: #1e3a5f; }
+  .loading-bar small { font-size: 11px; color: #3b82f6; }
+
+  /* Empty state */
+  .empty-state { text-align: center; padding: 48px 0; color: #94a3b8; }
+  .empty-state .icon { font-size: 32px; margin-bottom: 12px; }
+  .empty-state .title { font-size: 14px; font-weight: 500; }
+  .empty-state .sub { font-size: 12px; margin-top: 4px; }
+
+  /* Footer */
+  .footer { text-align: center; padding: 24px 0; margin-top: 16px; }
+  .footer p { font-size: 11px; color: #94a3b8; }
+
+  /* Counts */
+  .news-count { font-size: 12px; color: #64748b; margin-bottom: 12px; }
+  .news-count span { font-weight: 600; color: #1e293b; }
+
+  /* Cross-source comparison */
+  .comparisons-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+  @media (max-width: 900px) { .comparisons-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 500px) { .comparisons-grid { grid-template-columns: 1fr; } }
+  .comparison-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); display: flex; flex-direction: column; }
+  .comp-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px; }
+  .comp-topic { font-size: 12px; font-weight: 700; color: #1e293b; line-height: 1.4; flex: 1; }
+  .comp-badge { font-size: 10px; padding: 2px 6px; background: #eff6ff; color: #2563eb; border-radius: 6px; white-space: nowrap; flex-shrink: 0; font-weight: 600; }
+  .comp-row { display: flex; align-items: flex-start; gap: 7px; padding: 6px 0; border-top: 1px solid #f1f5f9; cursor: pointer; }
+  .comp-row:hover .comp-title { color: #2563eb; }
+  .comp-flag { font-size: 14px; flex-shrink: 0; line-height: 1.5; }
+  .comp-label { font-size: 10px; font-weight: 600; color: #94a3b8; line-height: 1.4; margin-bottom: 2px; }
+  .comp-title { font-size: 11px; color: #374151; line-height: 1.4; }
+  .comp-skeleton { grid-column: 1/-1; text-align: center; padding: 24px; color: #94a3b8; font-size: 13px; background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; }
+
+  /* Cluster view */
+  .topic-section { margin-bottom: 24px; }
+  .topic-header { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #1e293b; padding: 8px 0; border-bottom: 2px solid #e2e8f0; margin-bottom: 10px; }
+  .topic-count { font-size: 11px; background: #f1f5f9; color: #64748b; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+  .cluster-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); transition: box-shadow .2s; margin-bottom: 8px; }
+  .cluster-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+  .cluster-header { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+  .cluster-title { font-size: 13px; font-weight: 600; color: #1e293b; line-height: 1.4; }
+  .cluster-header:hover .cluster-title { color: #2563eb; }
+  .ru-sources-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
+  .ru-source-chip { font-size: 10px; padding: 2px 7px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px; font-weight: 500; }
+  .world-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
+  .world-chip { font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+  .world-chip-ua { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+  .world-chip-eu { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+  .world-chip-us { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+  .cluster-expand { padding-top: 10px; border-top: 1px solid #f1f5f9; margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+  .cluster-expand-item { font-size: 11px; color: #475569; padding: 6px 10px; background: #f8fafc; border-radius: 8px; cursor: pointer; display: flex; align-items: flex-start; gap: 8px; transition: background .15s; }
+  .cluster-expand-item:hover { background: #eff6ff; color: #1e40af; }
+  .cluster-expand-item b { font-weight: 600; white-space: nowrap; }
+  .cluster-expand-sep { font-size: 10px; font-weight: 600; color: #94a3b8; padding: 4px 0 2px; text-transform: uppercase; letter-spacing: .5px; }
+
+  /* Sentiment */
+  .sentiment-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .sent-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; border: 1px solid; }
+  .sent-positive { background: #f0fdf4; color: #16a34a; border-color: #86efac; }
+  .sent-negative { background: #fef2f2; color: #dc2626; border-color: #fca5a5; }
+  .sent-neutral  { background: #f8fafc; color: #64748b; border-color: #cbd5e1; }
+  .sent-divider  { font-size: 11px; color: #cbd5e1; }
+  .sent-conflict { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+  .expand-sent   { font-size: 10px; color: #94a3b8; margin-top: 4px; display: flex; flex-direction: column; gap: 3px; }
+  .expand-sent-row { display: flex; align-items: baseline; gap: 5px; }
+
+  /* Analog badges */
+  .analog-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600; border: 1px solid; }
+  .analog-confirmed { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+  .analog-unique { background: #fef9c3; color: #854d0e; border-color: #fde68a; }
+
+  /* RU Analysis tab */
+  .ru-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 600px) { .ru-stats-grid { grid-template-columns: 1fr; } }
+  .ru-stat-card { background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 16px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .ru-stat-num { font-size: 32px; font-weight: 700; line-height: 1; }
+  .ru-stat-lbl { font-size: 12px; color: #64748b; margin-top: 6px; }
+  .ru-section-title { font-size: 14px; font-weight: 700; color: #1e293b; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+  .ru-confirmed-card { background: #fff; border-radius: 12px; border: 1px solid #bbf7d0; padding: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .ru-unique-card { background: #fff; border-radius: 12px; border: 1px solid #fde68a; padding: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .ru-news-title { font-size: 13px; font-weight: 600; color: #1e293b; line-height: 1.4; }
+  .ru-analog-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .ru-analog-item { font-size: 11px; color: #475569; display: flex; align-items: flex-start; gap: 6px; padding: 5px 8px; background: #f8fafc; border-radius: 6px; cursor: pointer; transition: background .15s; }
+  .ru-analog-item:hover { background: #eff6ff; color: #1e40af; }
+  .ru-section-block { margin-bottom: 20px; }
+
+  /* Hide */
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="container">
+    <div class="header-inner">
+      <div class="header-left">
+        <div class="logo">🌐</div>
+        <div>
+          <div class="header-title">Медиамонитор</div>
+          <div class="header-meta">
+            <span id="lastUpdated"></span>
+            <span class="live-dot pulse-dot"></span>
+            <span>Live · обновление каждые 30 мин</span>
+          </div>
+        </div>
+      </div>
+      <button class="refresh-btn" id="refreshBtn" onclick="fetchAllNews()">🔄 Обновить</button>
+    </div>
+  </div>
+</div>
+
+<div class="container" style="padding-top:4px;padding-bottom:20px;">
+
+  <!-- LOADING -->
+  <div class="loading-bar" id="loadingBar" style="display:none;">
+    <div class="spinner"></div>
+    <div><p>Загрузка новостей...</p><small id="loadingStatus"></small></div>
+  </div>
+
+  <!-- NEWS TAB -->
+  <div id="newsTab">
+    <div class="filter-bar">
+      <div class="filter-row">
+        <input type="text" class="search-input" id="searchInput" placeholder="Поиск по новостям..." oninput="renderClustered()">
+        <button class="expand-btn" id="expandBtn" onclick="toggleExpandAll()">Развернуть все</button>
+      </div>
+      <div class="filter-row" id="categoryFilters"></div>
+    </div>
+    <div class="news-count" id="newsCount"></div>
+    <div class="news-list" id="newsList"></div>
+  </div>
+
+
+  <div class="footer"><p>Данные собираются из российских, украинских, европейских и американских источников. Автообновление каждые 30 минут.</p></div>
+</div>
+
+<script>
+// ====== CONFIG ======
+const CORS_PROXIES = [
+  url => `/api/proxy?url=${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
+
+const RSS_FEEDS = [
+  { url: "https://www.ukrinform.net/rss/block-lastnews", source: "ua", sourceLabel: "Ukrinform" },
+  { url: "https://www.pravda.com.ua/eng/rss/", source: "ua", sourceLabel: "Ukrainska Pravda" },
+  { url: "https://www.unian.info/rss/news.rss", source: "ua", sourceLabel: "UNIAN" },
+  { url: "https://kyivindependent.com/feed/", source: "ua", sourceLabel: "Kyiv Independent" },
+  { url: "https://tsn.ua/rss/full.rss", source: "ua", sourceLabel: "ТСН" },
+  { url: "https://feeds.bbci.co.uk/news/world/europe/rss.xml", source: "eu", sourceLabel: "BBC News" },
+  { url: "https://rss.dw.com/rdf/rss-en-world", source: "eu", sourceLabel: "DW News" },
+  { url: "https://feeds.reuters.com/reuters/worldNews", source: "eu", sourceLabel: "Reuters" },
+  { url: "https://feeds.feedburner.com/euronews/en/news/", source: "eu", sourceLabel: "Euronews" },
+  { url: "https://www.theguardian.com/world/ukraine/rss", source: "eu", sourceLabel: "The Guardian" },
+  { url: "https://rss.nytimes.com/services/xml/rss/nyt/Europe.xml", source: "us", sourceLabel: "NY Times" },
+  { url: "https://feeds.apnews.com/rss/apf-intlnews", source: "us", sourceLabel: "AP News" },
+  { url: "https://feeds.washingtonpost.com/rss/world/europe", source: "us", sourceLabel: "Washington Post" },
+  { url: "https://foreignpolicy.com/feed/", source: "us", sourceLabel: "Foreign Policy" },
+  { url: "https://tass.com/rss/v2.xml", source: "ru", sourceLabel: "TASS" },
+  { url: "https://ria.ru/export/rss2/archive/index.xml", source: "ru", sourceLabel: "РИА Новости" },
+  { url: "https://rg.ru/xml/index.xml", source: "ru", sourceLabel: "Российская газета" },
+  { url: "https://iz.ru/xml/rss/all.xml", source: "ru", sourceLabel: "Известия" },
+  { url: "https://lenta.ru/rss/news/", source: "ru", sourceLabel: "Лента.ру" },
+  { url: "https://www.kommersant.ru/RSS/news.xml", source: "ru", sourceLabel: "Коммерсантъ" },
+  { url: "https://www.rt.com/rss/news/", source: "ru", sourceLabel: "RT" },
+  { url: "https://rssexport.rbc.ru/rbcnews/news/30/full.rss", source: "ru", sourceLabel: "РБК" },
+  { url: "https://www.fontanka.ru/fontanka.rss", source: "ru", sourceLabel: "Фонтанка" },
+  { url: "https://www.mk.ru/rss/index.xml", source: "ru", sourceLabel: "МК" },
+  { url: "https://www.ntv.ru/novosti/rss/", source: "ru", sourceLabel: "НТВ" },
+  { url: "https://vz.ru/rss.xml", source: "ru", sourceLabel: "Взгляд" },
+  { url: "https://regnum.ru/rss.xml", source: "ru", sourceLabel: "REGNUM" },
+  { url: "https://www.interfax.ru/rss.asp", source: "ru", sourceLabel: "Интерфакс" },
+  { url: "https://www.gazeta.ru/export/rss/lenta.xml", source: "ru", sourceLabel: "Газета.ру" },
+];
+
+const CATEGORIES = [
+  { id: "all", label: "Все", icon: "🌐", color: "#1e40af" },
+  { id: "military", label: "Военная ситуация", icon: "⚔️", color: "#dc2626" },
+  { id: "negotiations", label: "Переговоры", icon: "🤝", color: "#7c3aed" },
+  { id: "economy", label: "Экономика", icon: "📈", color: "#16a34a" },
+  { id: "realestate", label: "Недвижимость", icon: "🏠", color: "#f59e0b" },
+  { id: "security", label: "Безопасность", icon: "🛡️", color: "#e11d48" },
+  { id: "tourism", label: "Туризм", icon: "✈️", color: "#0891b2" },
+  { id: "aviation", label: "Авиасообщение", icon: "🛩️", color: "#475569" },
+];
+
+const SOURCES = [
+  { id: "ua", label: "Украина", flag: "🇺🇦", color: "#005bbb" },
+  { id: "ru", label: "Россия", flag: "🇷🇺", color: "#d52b1e" },
+  { id: "eu", label: "Европа", flag: "🇪🇺", color: "#003399" },
+  { id: "us", label: "США", flag: "🇺🇸", color: "#3c3b6e" },
+  { id: "mixed", label: "Разные", flag: "🌍", color: "#6b7280" },
+];
+
+const CAT_KEYWORDS = {
+  military: ["military","army","troops","offensive","frontline","battle","combat","soldier","weapon","tank","artillery","brigade","territory","captured","liberated","advance","counteroffensive"],
+  negotiations: ["negotiat","peace","ceasefire","talk","diplomac","deal","agreement","summit","mediati","trump","zelensky","putin","sanction","tariff"],
+  economy: ["economy","gdp","inflation","trade","export","import","budget","finance","invest","bank","currency","hryvnia","growth","imf","world bank","ebrd","aid package","reconstruction"],
+  realestate: ["real estate","housing","property","apartment","construction","building","rent","mortgage"],
+  security: ["missile","drone","attack","strike","bomb","shell","air raid","alert","casualt","kill","wound","destroy","intercept","air defense","shahed","iskander","kalibr","energy infrastructure"],
+  tourism: ["tourism","tourist","travel","visit","hotel","vacation","carpathian","lviv visit","safe region"],
+  aviation: ["aviation","flight","airport","airspace","airline","ryanair","boryspil","aircraft","reopen"],
+};
+
+// ====== STATE ======
+let allNews = [];
+let ruClusters = [];
+let activeCategory = "all";
+const newsEmbeddings = new Map(); // item.id → number[]
+let semanticMode = false;
+let activeSource = "all";
+let expandedSet = new Set();
+let allExpanded = false;
+
+// ====== CROSS-SOURCE COMPARISON ======
+const STOP_RU = new Set(['это','для','при','как','что','его','они','она','или','так','уже','все','была','были','будет','свои','после','перед','через','также','кроме','между','против','только','очень','этот','этих','этой','этого','того','тому','такой','такие','нового','новой','есть','нет','над','под','без','ее','их','там','тут','где','когда','если','чтобы','даже','ещё','еще','можно','нужно','весь','всей','всех','было','стало','который','которые','которую','которого','которой','которых','одна','одно','одни','двух','трех','пяти']);
+
+function getKeyWords(title) {
+  return title.toLowerCase().replace(/[^а-яёa-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !STOP_RU.has(w));
+}
+
+function jaccardSim(a, b) {
+  const sa = new Set(getKeyWords(a)), sb = new Set(getKeyWords(b));
+  let inter = 0;
+  for (const w of sa) if (sb.has(w)) inter++;
+  const union = sa.size + sb.size - inter;
+  return union > 0 ? inter / union : 0;
+}
+
+function cosineSim(a, b) {
+  // vectors are pre-normalized → dot product = cosine similarity
+  let dot = 0;
+  for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
+  return dot;
+}
+
+function getSim(idA, titleA, idB, titleB) {
+  if (semanticMode && newsEmbeddings.has(idA) && newsEmbeddings.has(idB))
+    return cosineSim(newsEmbeddings.get(idA), newsEmbeddings.get(idB));
+  return jaccardSim(titleA, titleB);
+}
+
+const CLUSTER_THRESH = () => semanticMode ? 0.78 : 0.18;
+const ANALOG_THRESH  = () => semanticMode ? 0.68 : 0.13;
+
+// ====== SENTIMENT ======
+const SENT_POS = new Set([
+  'победа','победил','победили','выиграл','выиграли','успех','успешно','успешный',
+  'рост','вырос','увеличился','улучшение','улучшился','прогресс',
+  'соглашение','договор','договорились','подписан','подписали','утвержден','одобрен',
+  'перемирие','прекращение','деэскалация','примирение','урегулирование',
+  'помощь','помогли','поддержка','поддержали','сотрудничество',
+  'восстановление','восстановили','открытие','открыли','запуск','запустили',
+  'развитие','стабилизация','стабильность','укрепление','инвестиции',
+  'снижение','снизились','снизился','снизил','уменьшился',
+  'освобождение','освободили','спасение','спасли','выздоровление','выздоровел',
+  'прорыв','достижение','завершен','завершили','мирный','позитивный',
+]);
+const SENT_NEG = new Set([
+  'погиб','погибли','убит','убиты','убили','гибель','смерть','умер','умерли',
+  'жертвы','жертва','потери','ранен','ранены','ранили',
+  'взрыв','взорван','взорвали','удар','ударили','атака','атаковали',
+  'обстрел','обстреляли','бомбардировка','ракетный','ракеты','дрон','дроны',
+  'захват','захватили','уничтожен','уничтожили','разрушен','разрушили',
+  'катастрофа','трагедия','авария','кризис','эскалация',
+  'угроза','угрожает','угрожают','опасность','опасный',
+  'обвинение','обвинили','скандал','арест','арестован','задержан','задержали',
+  'война','вторжение','оккупация','теракт','теракты','конфликт',
+  'столкновение','противостояние','напряженность','напряжение',
+  'поражение','провал','провалился','отказ','отказали',
+  'протест','протестуют','беспорядки','санкции','блокада','осада',
+  'потерпел','рухнул','обвалился','упал','снижается','падение',
+]);
+
+const SENT_LABEL = { positive: '↑ позитивно', negative: '↓ негативно', neutral: '→ нейтрально' };
+
+function aggregateSentiment(texts) {
+  let pos = 0, neg = 0;
+  for (const text of texts) {
+    const words = text.toLowerCase().replace(/[^а-яёa-z0-9\s]/g, ' ').split(/\s+/);
+    for (const w of words) {
+      if (SENT_POS.has(w)) pos++;
+      if (SENT_NEG.has(w)) neg++;
+    }
+  }
+  if (pos === 0 && neg === 0) return 'neutral';
+  if (pos >= neg * 1.4) return 'positive';
+  if (neg >= pos * 1.4) return 'negative';
+  return 'neutral';
+}
+
+async function computeEmbeddings(items, statusEl) {
+  newsEmbeddings.clear();
+  semanticMode = false;
+  try {
+    if (statusEl) statusEl.textContent = 'Загрузка модели семантики (~17MB, кэшируется)...';
+    if (!window._embPipeline) {
+      const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+      env.allowLocalModels = false;
+      env.useBrowserCache = true;
+      window._embPipeline = await pipeline(
+        'feature-extraction',
+        'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+        { quantized: true,
+          progress_callback: p => {
+            if (statusEl && p.status === 'progress' && p.progress != null)
+              statusEl.textContent = `Загрузка модели: ${Math.round(p.progress)}%`;
+          }
+        }
+      );
+    }
+    const model = window._embPipeline;
+    const BATCH = 32;
+    for (let i = 0; i < items.length; i += BATCH) {
+      const batch = items.slice(i, i + BATCH);
+      if (statusEl) statusEl.textContent = `Семантический анализ: ${Math.min(i + BATCH, items.length)}/${items.length}`;
+      const out = await model(batch.map(n => n.title), { pooling: 'mean', normalize: true });
+      const arr = out.tolist();
+      batch.forEach((n, j) => newsEmbeddings.set(n.id, arr[j]));
+      out.dispose?.();
+    }
+    semanticMode = true;
+  } catch (e) {
+    console.warn('Semantic embeddings failed, using Jaccard:', e);
+  }
+}
+
+function findCrossSourceStories(news, maxStories = 4) {
+  const pool = news.slice(0, 500);
+  const used = new Set();
+  const clusters = [];
+  for (let i = 0; i < pool.length; i++) {
+    if (used.has(i)) continue;
+    const group = [pool[i]];
+    used.add(i);
+    for (let j = i + 1; j < pool.length; j++) {
+      if (used.has(j)) continue;
+      if (jaccardSim(pool[i].title, pool[j].title) >= 0.22) { group.push(pool[j]); used.add(j); }
+    }
+    const srcSet = new Set(group.map(n => n.source));
+    if (srcSet.size >= 2) {
+      const bySource = {};
+      for (const item of group) {
+        if (!bySource[item.source] || item.title.length < bySource[item.source].title.length) bySource[item.source] = item;
+      }
+      clusters.push({ bySource, sourceCount: srcSet.size });
+    }
+  }
+  clusters.sort((a, b) => b.sourceCount - a.sourceCount);
+  return clusters.slice(0, maxStories);
+}
+
+const SRC_META = { ua:{flag:'🇺🇦',label:'Украина'}, ru:{flag:'🇷🇺',label:'Россия'}, eu:{flag:'🇪🇺',label:'Европа'}, us:{flag:'🇺🇸',label:'США'}, mixed:{flag:'🌍',label:'Разные'} };
+
+function renderComparisons() {
+  const grid = document.getElementById("comparisonsGrid");
+  if (!grid) return;
+  const stories = findCrossSourceStories(allNews);
+  if (!stories.length) {
+    grid.innerHTML = '<div class="comp-skeleton">Не найдено событий, освещённых несколькими источниками</div>';
+    return;
+  }
+  grid.innerHTML = stories.map(story => {
+    const titles = Object.values(story.bySource).map(n => n.title);
+    const topic = [...titles].sort((a, b) => a.length - b.length)[0];
+    const srcCount = Object.keys(story.bySource).length;
+    const rows = Object.entries(story.bySource).map(([src, item]) => {
+      const m = SRC_META[src] || SRC_META.mixed;
+      return `<div class="comp-row" onclick="window.open('${escHtml(item.link)}','_blank')">
+        <span class="comp-flag">${m.flag}</span>
+        <div><div class="comp-label">${m.label} · ${escHtml(item.sourceLabel)}</div><div class="comp-title">${escHtml(item.title)}</div></div>
+      </div>`;
+    }).join('');
+    return `<div class="comparison-card fade-in">
+      <div class="comp-header"><div class="comp-topic">${escHtml(topic)}</div><span class="comp-badge">${srcCount} источ.</span></div>
+      ${rows}
+    </div>`;
+  }).join('');
+}
+
+// ====== RU ANALOG DETECTION ======
+function detectAnalogs(news) {
+  const ruNews = news.filter(n => n.source === 'ru');
+  const otherNews = news.filter(n => n.source !== 'ru');
+  for (const ru of ruNews) {
+    const analogs = [];
+    for (const other of otherNews) {
+      const sim = getSim(ru.id, ru.title, other.id, other.title);
+      if (sim >= ANALOG_THRESH()) analogs.push({ item: other, sim });
+    }
+    analogs.sort((a, b) => b.sim - a.sim);
+    ru.hasAnalog = analogs.length > 0;
+    ru.analogs = analogs.slice(0, 4).map(a => a.item);
+    ru.analogSources = [...new Set(analogs.map(a => a.item.source))];
+  }
+}
+
+
+// ====== RUSSIAN SOURCE CLUSTERING ======
+function clusterRussianNews() {
+  const ruNews = allNews.filter(n => n.source === 'ru');
+  const otherNews = allNews.filter(n => n.source !== 'ru');
+  const used = new Set();
+  const clusters = [];
+
+  for (let i = 0; i < ruNews.length; i++) {
+    if (used.has(i)) continue;
+    const group = [ruNews[i]];
+    used.add(i);
+    for (let j = i + 1; j < ruNews.length; j++) {
+      if (used.has(j)) continue;
+      if (getSim(ruNews[i].id, ruNews[i].title, ruNews[j].id, ruNews[j].title) >= CLUSTER_THRESH()) { group.push(ruNews[j]); used.add(j); }
+    }
+    const sorted = [...group].sort((a, b) => b.rawDate - a.rawDate);
+    const title = sorted[0].title;
+    const link = sorted[0].link;
+    const date = sorted[0].date;
+    const rawDate = sorted[0].rawDate;
+    const category = detectCategory(group.map(g => g.title).join(' '), '');
+
+    // Unique Russian sources in cluster
+    const seenLabels = new Set();
+    const ruSources = [];
+    for (const n of sorted) {
+      if (!seenLabels.has(n.sourceLabel)) { seenLabels.add(n.sourceLabel); ruSources.push(n); }
+    }
+
+    // Find analogs in non-Russian sources
+    const refId = sorted[0].id;
+    const analogs = [];
+    for (const other of otherNews) {
+      const sim = getSim(refId, title, other.id, other.title);
+      if (sim >= ANALOG_THRESH()) analogs.push({ item: other, sim });
+    }
+    analogs.sort((a, b) => b.sim - a.sim);
+    const analogItems = analogs.slice(0, 8).map(a => a.item);
+    const analogSources = [...new Set(analogItems.map(a => a.source))];
+
+    const ruSentiment = aggregateSentiment(ruSources.map(n => n.title + ' ' + (n.description || '')));
+    const analogSentiment = analogItems.length ? aggregateSentiment(analogItems.map(n => n.title + ' ' + (n.description || ''))) : null;
+    const sentConflict = analogSentiment && ruSentiment !== 'neutral' && analogSentiment !== 'neutral' && ruSentiment !== analogSentiment;
+
+    clusters.push({ title, link, date, rawDate, category, ruSources, analogItems, analogSources, hasAnalog: analogItems.length > 0, ruSentiment, analogSentiment, sentConflict });
+  }
+
+  ruClusters = clusters.sort((a, b) => b.ruSources.length - a.ruSources.length || b.rawDate - a.rawDate);
+}
+
+function renderClustered() {
+  const q = (document.getElementById("searchInput")?.value || '').toLowerCase();
+  let clusters = ruClusters;
+  if (activeCategory !== 'all') clusters = clusters.filter(c => c.category === activeCategory);
+  if (q) clusters = clusters.filter(c => c.title.toLowerCase().includes(q));
+
+  const modeTag = semanticMode
+    ? `<span style="font-size:10px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:6px;padding:1px 7px;font-weight:600;margin-left:6px">🧠 семантика</span>`
+    : `<span style="font-size:10px;background:#f1f5f9;color:#64748b;border-radius:6px;padding:1px 7px;margin-left:6px">Jaccard</span>`;
+  document.getElementById("newsCount").innerHTML = `Найдено <span>${clusters.length}</span> историй в российских СМИ (за последние 7 дней)${modeTag}`;
+
+  if (!clusters.length) {
+    document.getElementById("newsList").innerHTML = ruClusters.length === 0
+      ? '<div class="empty-state"><div class="icon">📡</div><div class="title">Анализируем источники...</div></div>'
+      : '<div class="empty-state"><div class="icon">⚠️</div><div class="title">Нет историй по выбранным фильтрам</div></div>';
+    return;
+  }
+
+  const byCategory = {};
+  for (const c of clusters) {
+    if (!byCategory[c.category]) byCategory[c.category] = [];
+    byCategory[c.category].push(c);
+  }
+
+  const catsToShow = activeCategory === 'all'
+    ? CATEGORIES.filter(c => c.id !== 'all' && byCategory[c.id]?.length)
+    : CATEGORIES.filter(c => c.id === activeCategory && byCategory[c.id]?.length);
+
+  document.getElementById("newsList").innerHTML = catsToShow.map(cat => {
+    const items = byCategory[cat.id] || [];
+    return `<div class="topic-section">
+      <div class="topic-header"><span>${cat.icon}</span><span>${cat.label}</span><span class="topic-count">${items.length}</span></div>
+      ${items.map((c, idx) => renderCluster(c, `${cat.id}-${idx}`)).join('')}
+    </div>`;
+  }).join('');
+}
+
+function renderCluster(c, id) {
+  const expanded = allExpanded || expandedSet.has(id);
+  const ruCount = c.ruSources.length;
+  const ruWord = ruCount === 1 ? 'источник' : ruCount < 5 ? 'источника' : 'источников';
+
+  const worldRow = c.hasAnalog
+    ? c.analogSources.map(s => {
+        const m = SRC_META[s]; if (!m) return '';
+        const cls = s === 'ua' ? 'world-chip-ua' : s === 'eu' ? 'world-chip-eu' : 'world-chip-us';
+        return `<span class="world-chip ${cls}">${m.flag} ${m.label}</span>`;
+      }).join('')
+    : '<span class="analog-badge analog-unique">⚠ Только в российских СМИ</span>';
+
+  const expandContent = expanded ? `<div class="cluster-expand">
+    <div class="cluster-expand-sep">🇷🇺 Российские источники (${c.ruSources.length})</div>
+    ${c.ruSources.map(n => {
+      const s = aggregateSentiment([n.title + ' ' + (n.description || '')]);
+      return `<div class="cluster-expand-item" onclick="window.open('${escHtml(n.link)}','_blank')">
+        <span>🇷🇺</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <b>${escHtml(n.sourceLabel)}</b>
+            <span class="sent-badge sent-${s}" style="font-size:9px;padding:1px 5px">${SENT_LABEL[s]}</span>
+          </div>
+          <div style="margin-top:2px;opacity:.85">${escHtml(n.title)}</div>
+        </div>
+      </div>`;
+    }).join('')}
+    ${c.analogItems.length ? `<div class="cluster-expand-sep">Эта же новость в других странах (${c.analogItems.length})</div>
+    ${c.analogItems.map(n => {
+      const m = SRC_META[n.source] || SRC_META.mixed;
+      const s = aggregateSentiment([n.title + ' ' + (n.description || '')]);
+      return `<div class="cluster-expand-item" onclick="window.open('${escHtml(n.link)}','_blank')">
+        <span>${m.flag}</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px">
+            <b>${escHtml(n.sourceLabel)}</b>
+            <span class="sent-badge sent-${s}" style="font-size:9px;padding:1px 5px">${SENT_LABEL[s]}</span>
+          </div>
+          <div style="margin-top:2px;opacity:.85">${escHtml(n.title)}</div>
+        </div>
+      </div>`;
+    }).join('')}` : ''}
+  </div>` : '';
+
+  return `<div class="cluster-card">
+    <div class="cluster-header" onclick="toggleCluster('${id}')">
+      <div style="flex:1;min-width:0">
+        <div class="cluster-title">${escHtml(c.title)}</div>
+        <div class="ru-sources-row">
+          <span style="font-size:11px;background:#ef4444;color:#fff;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">🇷🇺 ${ruCount} ${ruWord}</span>
+          ${c.ruSources.map(n => `<span class="ru-source-chip">${escHtml(n.sourceLabel)}</span>`).join('')}
+        </div>
+        <div class="world-row">${worldRow}</div>
+        <div class="sentiment-row">
+          <span class="sent-badge sent-${c.ruSentiment}" title="Тональность российских источников">🇷🇺 ${SENT_LABEL[c.ruSentiment]}</span>
+          ${c.analogSentiment ? `<span class="sent-divider">·</span><span class="sent-badge sent-${c.analogSentiment}" title="Тональность зарубежных источников">🌍 ${SENT_LABEL[c.analogSentiment]}</span>` : ''}
+          ${c.sentConflict ? `<span class="sent-conflict">⚡ расхождение</span>` : ''}
+        </div>
+      </div>
+      <span class="toggle-arrow" style="flex-shrink:0;margin-top:2px">${expanded ? '▲' : '▼'}</span>
+    </div>
+    ${expandContent}
+  </div>`;
+}
+
+function toggleCluster(id) {
+  if (expandedSet.has(id)) expandedSet.delete(id); else expandedSet.add(id);
+  renderClustered();
+}
+
+// ====== RSS FETCHING ======
+async function fetchWithProxy(url, pi = 0) {
+  if (pi >= CORS_PROXIES.length) throw new Error("All proxies failed");
+  try {
+    const r = await fetch(CORS_PROXIES[pi](url), { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) throw new Error(r.status);
+    return await r.text();
+  } catch { return fetchWithProxy(url, pi + 1); }
+}
+
+function parseRSS(xml) {
+  const doc = new DOMParser().parseFromString(xml, "text/xml");
+  const items = [];
+  doc.querySelectorAll("item").forEach(el => {
+    const t = el.querySelector("title")?.textContent?.trim() || "";
+    const l = el.querySelector("link")?.textContent?.trim() || "";
+    const d = el.querySelector("description")?.textContent?.trim() || "";
+    const p = el.querySelector("pubDate")?.textContent?.trim() || "";
+    if (t) items.push({ title: t, link: l, description: d.replace(/<[^>]*>/g, "").slice(0, 300), pubDate: p });
+  });
+  if (!items.length) doc.querySelectorAll("entry").forEach(el => {
+    const t = el.querySelector("title")?.textContent?.trim() || "";
+    const l = el.querySelector("link")?.getAttribute("href") || "";
+    const d = (el.querySelector("summary") || el.querySelector("content"))?.textContent?.trim() || "";
+    const p = el.querySelector("published")?.textContent?.trim() || el.querySelector("updated")?.textContent?.trim() || "";
+    if (t) items.push({ title: t, link: l, description: d.replace(/<[^>]*>/g, "").slice(0, 300), pubDate: p });
+  });
+  return items;
+}
+
+function detectCategory(title, desc) {
+  const txt = `${title} ${desc}`.toLowerCase();
+  let best = "military", bestScore = 0;
+  for (const [cat, kws] of Object.entries(CAT_KEYWORDS)) {
+    const score = kws.filter(k => txt.includes(k)).length;
+    if (score > bestScore) { bestScore = score; best = cat; }
+  }
+  return best;
+}
+
+function detectSource(feedSrc, link) {
+  if (feedSrc !== "mixed") return feedSrc;
+  const u = (link || "").toLowerCase();
+  if (u.includes("bbc") || u.includes("dw.com") || u.includes("reuters") || u.includes("rferl") || u.includes("guardian")) return "eu";
+  if (u.includes("nytimes") || u.includes("cnn") || u.includes("washingtonpost") || u.includes("apnews") || u.includes("aljazeera")) return "us";
+  if (u.includes("tass") || u.includes("rt.com") || u.includes("rbc.ru") || u.includes("ria.ru")) return "ru";
+  if (u.includes("ukrinform") || u.includes("pravda.com.ua") || u.includes("unian")) return "ua";
+  return "eu";
+}
+
+function detectImpact(title, desc) {
+  const txt = `${title} ${desc}`.toLowerCase();
+  if (["massive","record","historic","unprecedented","killed","dead","offensive","ceasefire","peace deal","breakthrough","crisis"].some(w => txt.includes(w))) return "high";
+  if (["tourist","hotel","restaurant","museum","apartment price","rent"].some(w => txt.includes(w))) return "low";
+  return "medium";
+}
+
+async function translateText(text) {
+  if (!text || !text.trim()) return text;
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ru&dt=t&q=${encodeURIComponent(text)}`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const data = await r.json();
+    return data[0].map(x => x[0]).join('');
+  } catch { return text; }
+}
+
+async function translateAllNews(items, statusEl) {
+  const toTranslate = items.filter(n => n.source !== 'ru');
+  const BATCH = 6;
+  for (let i = 0; i < toTranslate.length; i += BATCH) {
+    const batch = toTranslate.slice(i, i + BATCH);
+    if (statusEl) statusEl.textContent = `Перевод: ${Math.min(i + BATCH, toTranslate.length)}/${toTranslate.length}`;
+    await Promise.all(batch.map(async n => {
+      n.title = await translateText(n.title);
+      n.description = await translateText(n.description);
+    }));
+    if (i + BATCH < toTranslate.length) await new Promise(r => setTimeout(r, 150));
+  }
+}
+
+async function fetchAllNews() {
+  const btn = document.getElementById("refreshBtn");
+  const bar = document.getElementById("loadingBar");
+  const status = document.getElementById("loadingStatus");
+  btn.disabled = true;
+  bar.style.display = "flex";
+
+  const total = RSS_FEEDS.length;
+  let loaded = 0, errors = 0;
+  const rawItems = [];
+
+  const update = () => { status.textContent = `Загружено: ${loaded}/${total}${errors ? ` (ошибок: ${errors})` : ""}`; };
+
+  // RSS feeds
+  const rssTasks = RSS_FEEDS.map(async f => {
+    try {
+      const xml = await fetchWithProxy(f.url);
+      parseRSS(xml).forEach(item => rawItems.push({ ...item, feedSource: f.source, feedSourceLabel: f.sourceLabel, feedCategory: null }));
+    } catch { errors++; }
+    loaded++; update();
+  });
+
+  await Promise.allSettled(rssTasks);
+
+  // Filter: last 7 days only
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
+
+  const processed = rawItems
+    .filter(item => {
+      if (item.pubDate) { const d = new Date(item.pubDate); if (!isNaN(d) && d < cutoff) return false; }
+      return true;
+    })
+    .map((item, i) => {
+      const cat = item.feedCategory || detectCategory(item.title, item.description);
+      const src = detectSource(item.feedSource, item.link);
+      const date = item.pubDate ? new Date(item.pubDate) : new Date();
+      return {
+        id: `${src}-${i}-${Date.now()}`,
+        title: item.title,
+        description: item.description || "Подробности по ссылке на источник.",
+        link: item.link,
+        category: cat,
+        source: src,
+        sourceLabel: item.feedSourceLabel,
+        date: !isNaN(date) ? date.toLocaleDateString("ru-RU", { day:"numeric", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }) : "Сегодня",
+        rawDate: date,
+        impact: detectImpact(item.title, item.description),
+      };
+    })
+    .sort((a, b) => b.rawDate - a.rawDate);
+
+  // Deduplicate
+  const seen = new Set();
+  allNews = processed.filter(item => {
+    const key = item.title.toLowerCase().replace(/[^a-zа-я0-9]/g, "").slice(0, 60);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  document.getElementById("lastUpdated").textContent = `Обновлено: ${new Date().toLocaleTimeString("ru-RU", { hour:"2-digit", minute:"2-digit" })}`;
+  btn.disabled = false;
+
+  // Translate non-Russian items, then cluster and render
+  const loadingP = bar.querySelector("p");
+  if (loadingP) loadingP.textContent = "Перевод источников...";
+  await translateAllNews(allNews, status);
+  if (loadingP) loadingP.textContent = "Семантический анализ...";
+  await computeEmbeddings(allNews, status);
+  detectAnalogs(allNews);
+  clusterRussianNews();
+  bar.style.display = "none";
+  renderFilters();
+  renderClustered();
+}
+
+// ====== RENDERING ======
+function renderFilters() {
+  const catCounts = { all: ruClusters.length };
+  CATEGORIES.forEach(c => { if (c.id !== 'all') catCounts[c.id] = ruClusters.filter(cl => cl.category === c.id).length; });
+
+  document.getElementById("categoryFilters").innerHTML = CATEGORIES.map(c =>
+    `<button class="filter-btn ${activeCategory === c.id ? 'active' : ''}" style="${activeCategory === c.id ? `background:${c.color};color:#fff;border-color:${c.color}` : ''}" onclick="setCategory('${c.id}')">${c.icon} ${c.label} <span class="filter-count">${catCounts[c.id] || 0}</span></button>`
+  ).join("");
+}
+
+function getFilteredNews() {
+  const q = document.getElementById("searchInput").value.toLowerCase();
+  return allNews.filter(n => {
+    if (activeCategory !== "all" && n.category !== activeCategory) return false;
+    if (activeSource !== "all" && n.source !== activeSource) return false;
+    if (q && !n.title.toLowerCase().includes(q) && !n.description.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function renderNews() {
+  const filtered = getFilteredNews();
+  document.getElementById("newsCount").innerHTML = `Показано <span>${filtered.length}</span> новостей (только за последние 7 дней)`;
+
+  if (!filtered.length) {
+    document.getElementById("newsList").innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><div class="title">Нет новостей по выбранным фильтрам</div><div class="sub">Попробуйте изменить категорию или источник</div></div>`;
+    return;
+  }
+
+  document.getElementById("newsList").innerHTML = filtered.map(n => {
+    const cat = CATEGORIES.find(c => c.id === n.category) || CATEGORIES[0];
+    const src = SOURCES.find(s => s.id === n.source) || SOURCES[4];
+    const expanded = allExpanded || expandedSet.has(n.id);
+    const impactLabel = { high: "Высокое", medium: "Среднее", low: "Низкое" }[n.impact];
+    return `
+      <div class="news-card fade-in">
+        <div class="news-header" onclick="toggleNews('${n.id}')">
+          <div class="news-left">
+            <div class="news-icon" style="background:${cat.color}15">${cat.icon}</div>
+            <div style="min-width:0">
+              <div class="news-title">${escHtml(n.title)}</div>
+              <div class="news-meta">
+                <span class="news-date">⏰ ${n.date}</span>
+                <span class="news-source-badge" style="background:${src.color}15;color:${src.color}">${src.flag} ${escHtml(n.sourceLabel)}</span>
+                <span class="impact-badge impact-${n.impact}">${impactLabel}</span>
+                ${n.source === 'ru' && n.hasAnalog !== undefined ? (n.hasAnalog ? `<span class="analog-badge analog-confirmed">✓ ${n.analogSources.map(s => SRC_META[s]?.flag || '').join('')} подтверждено</span>` : `<span class="analog-badge analog-unique">⚠ Только в РФ</span>`) : ''}
+              </div>
+            </div>
+          </div>
+          <span class="toggle-arrow">${expanded ? "▲" : "▼"}</span>
+        </div>
+        ${expanded ? `<div class="news-body"><p>${escHtml(n.description)}</p>${n.link ? `<a href="${escHtml(n.link)}" target="_blank" rel="noopener">↗ Источник</a>` : ""}</div>` : ""}
+      </div>`;
+  }).join("");
+}
+
+function escHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+function toggleNews(id) {
+  if (expandedSet.has(id)) expandedSet.delete(id); else expandedSet.add(id);
+  renderClustered();
+}
+
+function toggleExpandAll() {
+  allExpanded = !allExpanded;
+  expandedSet.clear();
+  document.getElementById("expandBtn").textContent = allExpanded ? "Свернуть все" : "Развернуть все";
+  renderClustered();
+}
+
+function setCategory(id) { activeCategory = id; renderFilters(); renderClustered(); }
+function setSource(id) { activeSource = id; renderFilters(); renderClustered(); }
+
+
+// ====== INIT ======
+fetchAllNews();
+setInterval(fetchAllNews, 30 * 60 * 1000);
+</script>
+</body>
+</html>
