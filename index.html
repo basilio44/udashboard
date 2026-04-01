@@ -260,6 +260,14 @@ const RSS_FEEDS = [
   { url: "https://www.gazeta.ru/export/rss/lenta.xml", source: "ru", sourceLabel: "Газета.ру" },
 ];
 
+const TG_CHANNELS = [
+  { channel: 'bazabazon',     sourceLabel: 'База (TG)' },
+  { channel: 'meduzalive',    sourceLabel: 'Meduza Live (TG)' },
+  { channel: 'rt_russian',    sourceLabel: 'RT Русский (TG)' },
+  { channel: 'rbc_news',      sourceLabel: 'РБК (TG)' },
+  { channel: 'novosti_efir',  sourceLabel: 'Новости Эфир (TG)' },
+];
+
 const CATEGORIES = [
   { id: "all", label: "Все", icon: "🌐", color: "#1e40af" },
   { id: "military", label: "Военная ситуация", icon: "⚔️", color: "#dc2626" },
@@ -651,6 +659,24 @@ async function fetchWithProxy(url, pi = 0) {
   } catch { return fetchWithProxy(url, pi + 1); }
 }
 
+function parseTelegram(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const items = [];
+  doc.querySelectorAll('.tgme_widget_message').forEach(el => {
+    const textEl = el.querySelector('.tgme_widget_message_text');
+    const timeEl = el.querySelector('time[datetime]');
+    const linkEl = el.querySelector('a.tgme_widget_message_date');
+    const text = textEl?.innerText?.trim() || textEl?.textContent?.trim() || '';
+    if (!text || text.length < 15) return;
+    const title = text.replace(/\n+/g, ' ').slice(0, 160).trim();
+    const description = text.replace(/\n+/g, ' ').slice(0, 300).trim();
+    const pubDate = timeEl?.getAttribute('datetime') || '';
+    const link = linkEl?.getAttribute('href') || '';
+    items.push({ title, description, link, pubDate });
+  });
+  return items;
+}
+
 function parseRSS(xml) {
   const doc = new DOMParser().parseFromString(xml, "text/xml");
   const items = [];
@@ -729,7 +755,7 @@ async function fetchAllNews() {
   btn.disabled = true;
   bar.style.display = "flex";
 
-  const total = RSS_FEEDS.length;
+  const total = RSS_FEEDS.length + TG_CHANNELS.length;
   let loaded = 0, errors = 0;
   const rawItems = [];
 
@@ -744,7 +770,16 @@ async function fetchAllNews() {
     loaded++; update();
   });
 
-  await Promise.allSettled(rssTasks);
+  // Telegram channels
+  const tgTasks = TG_CHANNELS.map(async ch => {
+    try {
+      const html = await fetchWithProxy(`https://t.me/s/${ch.channel}`);
+      parseTelegram(html).forEach(item => rawItems.push({ ...item, feedSource: 'ru', feedSourceLabel: ch.sourceLabel, feedCategory: null }));
+    } catch { errors++; }
+    loaded++; update();
+  });
+
+  await Promise.allSettled([...rssTasks, ...tgTasks]);
 
   // Filter: last 7 days only
   const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7);
