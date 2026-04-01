@@ -262,11 +262,19 @@ const RSS_FEEDS = [
 ];
 
 const TG_CHANNELS = [
-  { channel: 'bazabazon',     sourceLabel: 'База (TG)' },
-  { channel: 'meduzalive',    sourceLabel: 'Meduza Live (TG)' },
-  { channel: 'rt_russian',    sourceLabel: 'RT Русский (TG)' },
-  { channel: 'rbc_news',      sourceLabel: 'РБК (TG)' },
-  { channel: 'novosti_efir',  sourceLabel: 'Новости Эфир (TG)' },
+  // Russian sources
+  { channel: 'bazabazon',           source: 'ru',    sourceLabel: 'База (TG)' },
+  { channel: 'meduzalive',          source: 'ru',    sourceLabel: 'Meduza Live (TG)' },
+  { channel: 'rt_russian',          source: 'ru',    sourceLabel: 'RT Русский (TG)' },
+  { channel: 'rbc_news',            source: 'ru',    sourceLabel: 'РБК (TG)' },
+  { channel: 'novosti_efir',        source: 'ru',    sourceLabel: 'Новости Эфир (TG)' },
+  // Non-Russian sources (for analog detection)
+  { channel: 'FO_RK',               source: 'mixed', sourceLabel: 'FO RK (TG)' },
+  { channel: 'truexanewsua',        source: 'ua',    sourceLabel: 'True Xanews UA (TG)' },
+  { channel: 'rwacurrentaffairs',   source: 'mixed', sourceLabel: 'RWA Current Affairs (TG)' },
+  { channel: 'MyGovCoronaNewsdesk', source: 'mixed', sourceLabel: 'MyGov Newsdesk (TG)' },
+  { channel: 'DLBGB',               source: 'mixed', sourceLabel: 'DLBGB (TG)' },
+  { channel: 'goz8888',             source: 'mixed', sourceLabel: 'Goz8888 (TG)' },
 ];
 
 const CATEGORIES = [
@@ -775,7 +783,7 @@ async function fetchAllNews() {
   const tgTasks = TG_CHANNELS.map(async ch => {
     try {
       const html = await fetchWithProxy(`https://t.me/s/${ch.channel}`);
-      parseTelegram(html).forEach(item => rawItems.push({ ...item, feedSource: 'ru', feedSourceLabel: ch.sourceLabel, feedCategory: null }));
+      parseTelegram(html).forEach(item => rawItems.push({ ...item, feedSource: ch.source, feedSourceLabel: ch.sourceLabel, feedCategory: null }));
     } catch { errors++; }
     loaded++; update();
   });
