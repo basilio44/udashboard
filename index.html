@@ -774,7 +774,9 @@ function clusterRussianNews() {
   const dayOf = d => new Date(d).setHours(0,0,0,0);
   ruClusters = clusters.sort((a, b) => {
     const dd = dayOf(b.rawDate) - dayOf(a.rawDate);
-    return dd !== 0 ? dd : b.ruSources.length - a.ruSources.length;
+    if (dd !== 0) return dd;
+    const ac = (b.analogSources?.length || 0) - (a.analogSources?.length || 0);
+    return ac !== 0 ? ac : b.ruSources.length - a.ruSources.length;
   });
 }
 
@@ -831,7 +833,9 @@ function clusterSourceNews(source) {
   const dayOfSrc = d => new Date(d).setHours(0,0,0,0);
   srcClusters = clusters.sort((a, b) => {
     const dd = dayOfSrc(b.rawDate) - dayOfSrc(a.rawDate);
-    return dd !== 0 ? dd : b.ruSourcesList.length - a.ruSourcesList.length;
+    if (dd !== 0) return dd;
+    const ac = (b.ruSourcesList?.length > 0 ? 1 : 0) - (a.ruSourcesList?.length > 0 ? 1 : 0);
+    return ac !== 0 ? ac : b.srcSources.length - a.srcSources.length;
   });
 }
 
@@ -1036,7 +1040,7 @@ function renderCluster(c, id) {
     ? c.analogSources.map(s => {
         const m = SRC_META[s]; if (!m) return '';
         const cls = s === 'ua' ? 'world-chip-ua' : s === 'eu' ? 'world-chip-eu' : s === 'us' ? 'world-chip-us' : s === 'ar' ? 'world-chip-ar' : s === 'jp' ? 'world-chip-jp' : 'world-chip-eu';
-        return `<span class="world-chip ${cls}">${m.flag} ${m.label}</span>`;
+        return `<span class="world-chip ${cls}" title="${m.label}">${m.flag}</span>`;
       }).join('')
     : '<span style="font-size:15px;font-weight:700;color:#d97706" title="Только в российских СМИ">❕</span>';
 
