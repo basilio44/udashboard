@@ -610,13 +610,29 @@ async function computeEmbeddings(items, statusEl) {
       const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
       env.allowLocalModels = false;
       env.useBrowserCache = true;
+      const fileProgress = {};
       window._embPipeline = await pipeline(
         'feature-extraction',
         'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
         { quantized: true,
           progress_callback: p => {
-            if (statusEl && p.status === 'progress' && p.progress != null)
-              statusEl.textContent = `Загрузка модели: ${Math.round(p.progress)}%`;
+            if (!statusEl) return;
+            if (p.status === 'progress' && p.progress != null) {
+              fileProgress[p.file || p.name || 'model'] = p.progress;
+              const vals = Object.values(fileProgress);
+              const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+              statusEl.textContent = `Загрузка модели: ${Math.round(avg)}%`;
+            } else if (p.status === 'initiate') {
+              fileProgress[p.file || p.name || 'model'] = 0;
+              const vals = Object.values(fileProgress);
+              const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+              statusEl.textContent = `Загрузка модели: ${Math.round(avg)}%`;
+            } else if (p.status === 'done') {
+              fileProgress[p.file || p.name || 'model'] = 100;
+              const vals = Object.values(fileProgress);
+              const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+              statusEl.textContent = `Загрузка модели: ${Math.round(avg)}%`;
+            }
           }
         }
       );
@@ -1325,8 +1341,8 @@ async function fetchAllNews() {
           if (!v || gen !== _loadGen) return;
           const mPct = v.match(/(\d+)%/);
           const mBatch = v.match(/(\d+)\/(\d+)/);
-          if (mPct) setProgress(70 + parseInt(mPct[1]) * 0.05, `Загрузка модели семантики...`);
-          else if (mBatch) setProgress(75 + (parseInt(mBatch[1]) / parseInt(mBatch[2])) * 20,
+          if (mPct) setProgress(70 + parseInt(mPct[1]) * 0.22, `Модель: ${mPct[1]}%`);
+          else if (mBatch) setProgress(92 + (parseInt(mBatch[1]) / parseInt(mBatch[2])) * 6,
             `Семантика: ${mBatch[1]}/${mBatch[2]}`);
           else setProgress(70, `Инициализация модели...`);
         }
