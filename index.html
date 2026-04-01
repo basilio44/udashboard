@@ -632,7 +632,11 @@ function clusterRussianNews() {
     clusters.push({ title, link, date, rawDate, category, ruSources, analogItems, analogSources, hasAnalog: analogItems.length > 0, ruSentiment, analogSentiment, sentConflict });
   }
 
-  ruClusters = clusters.sort((a, b) => b.ruSources.length - a.ruSources.length || b.rawDate - a.rawDate);
+  const dayOf = d => new Date(d).setHours(0,0,0,0);
+  ruClusters = clusters.sort((a, b) => {
+    const dd = dayOf(b.rawDate) - dayOf(a.rawDate);
+    return dd !== 0 ? dd : b.ruSources.length - a.ruSources.length;
+  });
 }
 
 // ====== REVERSE CLUSTERING (source → RU) ======
@@ -685,7 +689,11 @@ function clusterSourceNews(source) {
     clusters.push({ title, link, date, rawDate, category, srcSources, analogItems, ruSourcesList, hasAnalog: analogItems.length > 0, srcSentiment, ruSentiment, sentConflict, source });
   }
 
-  srcClusters = clusters.sort((a, b) => b.ruSourcesList.length - a.ruSourcesList.length || b.rawDate - a.rawDate);
+  const dayOfSrc = d => new Date(d).setHours(0,0,0,0);
+  srcClusters = clusters.sort((a, b) => {
+    const dd = dayOfSrc(b.rawDate) - dayOfSrc(a.rawDate);
+    return dd !== 0 ? dd : b.ruSourcesList.length - a.ruSourcesList.length;
+  });
 }
 
 function renderSrcClustered() {
