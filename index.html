@@ -6,9 +6,8 @@
 <title>Медиамонитор</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Rajdhani', -apple-system, sans-serif; background: linear-gradient(135deg, #f8fafc, #f1f5f9, #eff6ff); min-height: 100vh; color: #1e293b; }
+  body { font-family: 'Consolas', 'Courier New', monospace; background: linear-gradient(135deg, #f8fafc, #f1f5f9, #eff6ff); min-height: 100vh; color: #1e293b; }
   @media (min-width: 769px) { body { zoom: 1.25; } }
 
   /* Scrollbar */
@@ -647,7 +646,10 @@ function renderCluster(c, id) {
   return `<div class="cluster-card">
     <div class="cluster-header" onclick="toggleCluster('${id}')">
       <div style="flex:1;min-width:0">
-        <div class="cluster-title">${escHtml(c.title)}</div>
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <div class="cluster-title">${escHtml(c.title)}</div>
+          <span style="font-size:10px;color:#94a3b8;white-space:nowrap;flex-shrink:0">⏰ ${c.date}</span>
+        </div>
         <div class="ru-sources-row">
           <span style="font-size:11px;background:#ef4444;color:#fff;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">🇷🇺 ${ruCount} ${ruWord}</span>
           ${c.ruSources.map(n => `<span class="ru-source-chip">${escHtml(n.sourceLabel)}</span>`).join('')}
