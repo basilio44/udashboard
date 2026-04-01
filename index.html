@@ -131,6 +131,8 @@
   .world-chip-ua { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
   .world-chip-eu { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
   .world-chip-us { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+  .world-chip-ar { background: #fefce8; color: #854d0e; border: 1px solid #fde68a; }
+  .world-chip-jp { background: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
   .cluster-expand { padding-top: 10px; border-top: 1px solid #f1f5f9; margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
   .cluster-expand-item { font-size: 11px; color: #475569; padding: 6px 10px; background: #f8fafc; border-radius: 8px; cursor: pointer; display: flex; align-items: flex-start; gap: 8px; transition: background .15s; }
   .cluster-expand-item:hover { background: #eff6ff; color: #1e40af; }
@@ -264,8 +266,8 @@ const RSS_FEEDS = [
   { url: "https://feeds.apnews.com/rss/apf-intlnews", source: "us", sourceLabel: "AP News" },
   { url: "https://feeds.washingtonpost.com/rss/world/europe", source: "us", sourceLabel: "Washington Post" },
   { url: "https://foreignpolicy.com/feed/", source: "us", sourceLabel: "Foreign Policy" },
-  { url: "https://www.aljazeera.com/xml/rss/all.xml", source: "eu", sourceLabel: "Al Jazeera" },
-  { url: "https://www.japantimes.co.jp/feed/", source: "eu", sourceLabel: "Japan Times" },
+  { url: "https://www.aljazeera.com/xml/rss/all.xml", source: "ar", sourceLabel: "Al Jazeera" },
+  { url: "https://www.japantimes.co.jp/feed/", source: "jp", sourceLabel: "Japan Times" },
   { url: "https://tass.com/rss/v2.xml", source: "ru", sourceLabel: "TASS" },
   { url: "https://ria.ru/export/rss2/archive/index.xml", source: "ru", sourceLabel: "РИА Новости" },
   { url: "https://rg.ru/xml/index.xml", source: "ru", sourceLabel: "Российская газета" },
@@ -315,6 +317,8 @@ const SOURCES = [
   { id: "ru", label: "Россия", flag: "🇷🇺", color: "#d52b1e" },
   { id: "eu", label: "Европа", flag: "🇪🇺", color: "#003399" },
   { id: "us", label: "США", flag: "🇺🇸", color: "#3c3b6e" },
+  { id: "ar", label: "Арабский мир", flag: "🇶🇦", color: "#8b5e00" },
+  { id: "jp", label: "Япония", flag: "🇯🇵", color: "#be123c" },
   { id: "mixed", label: "Разные", flag: "🌍", color: "#6b7280" },
 ];
 
@@ -491,7 +495,7 @@ function findCrossSourceStories(news, maxStories = 4) {
   return clusters.slice(0, maxStories);
 }
 
-const SRC_META = { ua:{flag:'🇺🇦',label:'Украина'}, ru:{flag:'🇷🇺',label:'Россия'}, eu:{flag:'🇪🇺',label:'Европа'}, us:{flag:'🇺🇸',label:'США'}, mixed:{flag:'🌍',label:'Разные'} };
+const SRC_META = { ua:{flag:'🇺🇦',label:'Украина'}, ru:{flag:'🇷🇺',label:'Россия'}, eu:{flag:'🇪🇺',label:'Европа'}, us:{flag:'🇺🇸',label:'США'}, ar:{flag:'🇶🇦',label:'Арабский мир'}, jp:{flag:'🇯🇵',label:'Япония'}, mixed:{flag:'🌍',label:'Разные'} };
 
 function renderComparisons() {
   const grid = document.getElementById("comparisonsGrid");
@@ -632,7 +636,7 @@ function renderCluster(c, id) {
   const worldRow = c.hasAnalog
     ? c.analogSources.map(s => {
         const m = SRC_META[s]; if (!m) return '';
-        const cls = s === 'ua' ? 'world-chip-ua' : s === 'eu' ? 'world-chip-eu' : 'world-chip-us';
+        const cls = s === 'ua' ? 'world-chip-ua' : s === 'eu' ? 'world-chip-eu' : s === 'us' ? 'world-chip-us' : s === 'ar' ? 'world-chip-ar' : s === 'jp' ? 'world-chip-jp' : 'world-chip-eu';
         return `<span class="world-chip ${cls}">${m.flag} ${m.label}</span>`;
       }).join('')
     : '<span class="analog-badge analog-unique">⚠ Только в российских СМИ</span>';
