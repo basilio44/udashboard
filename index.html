@@ -313,14 +313,15 @@ const TG_CHANNELS = [
 ];
 
 const CATEGORIES = [
-  { id: "all", label: "Все", icon: "🌐", color: "#1e40af" },
-  { id: "military", label: "Военная ситуация", icon: "⚔️", color: "#dc2626" },
-  { id: "negotiations", label: "Переговоры", icon: "🤝", color: "#7c3aed" },
-  { id: "economy", label: "Экономика", icon: "📈", color: "#16a34a" },
-  { id: "realestate", label: "Недвижимость", icon: "🏠", color: "#f59e0b" },
-  { id: "security", label: "Безопасность", icon: "🛡️", color: "#e11d48" },
-  { id: "tourism", label: "Туризм", icon: "✈️", color: "#0891b2" },
-  { id: "aviation", label: "Авиасообщение", icon: "🛩️", color: "#475569" },
+  { id: "all",          label: "Все",               icon: "🌐", color: "#1e40af" },
+  { id: "military",     label: "Военная ситуация",  icon: "⚔️", color: "#dc2626" },
+  { id: "negotiations", label: "Переговоры",         icon: "🤝", color: "#7c3aed" },
+  { id: "economy",      label: "Экономика",          icon: "📈", color: "#16a34a" },
+  { id: "realestate",   label: "Недвижимость",       icon: "🏠", color: "#f59e0b" },
+  { id: "security",     label: "Безопасность",       icon: "🛡️", color: "#e11d48" },
+  { id: "tourism",      label: "Туризм",             icon: "✈️", color: "#0891b2" },
+  { id: "aviation",     label: "Авиасообщение",      icon: "🛩️", color: "#475569" },
+  { id: "other",        label: "Другое",             icon: "📰", color: "#64748b" },
 ];
 
 const SOURCES = [
@@ -334,13 +335,34 @@ const SOURCES = [
 ];
 
 const CAT_KEYWORDS = {
-  military: ["military","army","troops","offensive","frontline","battle","combat","soldier","weapon","tank","artillery","brigade","territory","captured","liberated","advance","counteroffensive"],
-  negotiations: ["negotiat","peace","ceasefire","talk","diplomac","deal","agreement","summit","mediati","trump","zelensky","putin","sanction","tariff"],
-  economy: ["economy","gdp","inflation","trade","export","import","budget","finance","invest","bank","currency","hryvnia","growth","imf","world bank","ebrd","aid package","reconstruction"],
-  realestate: ["real estate","housing","property","apartment","construction","building","rent","mortgage"],
-  security: ["missile","drone","attack","strike","bomb","shell","air raid","alert","casualt","kill","wound","destroy","intercept","air defense","shahed","iskander","kalibr","energy infrastructure"],
-  tourism: ["tourism","tourist","travel","visit","hotel","vacation","carpathian","lviv visit","safe region"],
-  aviation: ["aviation","flight","airport","airspace","airline","ryanair","boryspil","aircraft","reopen"],
+  military: [
+    "military","army","troops","offensive","frontline","battle","combat","soldier","weapon","tank","artillery","brigade","territory","captured","liberated","advance","counteroffensive","war","warfare","armed","forces","conflict","occupation",
+    "военн","армии","армия","войск","наступлени","фронт","бой","боев","солдат","оружи","танк","артиллери","бригад","захват","освобожд","контрнаступ","война","вооружён","оккупац","потер","гибел","убит","ранен","всу","нато","украин","россий",
+  ],
+  negotiations: [
+    "negotiat","peace","ceasefire","talk","diplomac","deal","agreement","summit","mediati","trump","zelensky","putin","sanction","tariff","treaty","bilateral","minister","foreign",
+    "перегово","перемири","прекращени","диплома","сделк","соглашени","саммит","посредни","трамп","зеленск","путин","санкц","тариф","договор","двустор","министр","мид","переговор","мирн",
+  ],
+  economy: [
+    "economy","gdp","inflation","trade","export","import","budget","finance","invest","bank","currency","growth","imf","market","sales","company","companies","price","tax","fiscal","tariff","duty","revenue","profit","spending",
+    "экономик","ввп","инфляц","торговл","экспорт","импорт","бюджет","финанс","инвестиц","банк","валют","рост","продаж","компани","рынок","цен","налог","пошлин","выручк","прибыл","расход","беспошлин","торгов",
+  ],
+  realestate: [
+    "real estate","housing","property","apartment","construction","building","rent","mortgage",
+    "недвижим","жильё","жилье","квартир","строительств","здани","аренд","ипотек","дом","объект",
+  ],
+  security: [
+    "missile","drone","attack","strike","bomb","shell","air raid","alert","casualt","kill","wound","destroy","intercept","air defense","shahed","iskander","kalibr","energy infrastructure","explosion","terrorist",
+    "ракет","дрон","удар","взрыв","обстрел","бомб","воздушн","тревог","жертв","убит","ранен","уничтож","перехват","пво","шахед","инфраструктур","террор",
+  ],
+  tourism: [
+    "tourism","tourist","travel","visit","hotel","vacation","resort","leisure","recreation",
+    "туризм","турист","путешеств","отель","гостиниц","отдых","курорт","поездк","визит",
+  ],
+  aviation: [
+    "aviation","flight","airport","airspace","airline","aircraft","reopen","runway","pilot",
+    "авиац","авиакомпани","аэропорт","воздушн пространств","самолёт","самолет","рейс","пилот","взлётн",
+  ],
 };
 
 // ====== STATE ======
@@ -981,7 +1003,7 @@ function parseRSS(xml) {
 
 function detectCategory(title, desc) {
   const txt = `${title} ${desc}`.toLowerCase();
-  let best = "military", bestScore = 0;
+  let best = "other", bestScore = 0;
   for (const [cat, kws] of Object.entries(CAT_KEYWORDS)) {
     const score = kws.filter(k => txt.includes(k)).length;
     if (score > bestScore) { bestScore = score; best = cat; }
