@@ -186,11 +186,10 @@
   .ru-section-block { margin-bottom: 20px; }
 
   /* Region tabs */
-  .region-tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 0 4px; border-bottom: 1px solid #e2e8f0; margin-bottom: 0; }
-  .region-tab { padding: 5px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; transition: all .15s; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+  .region-tabs { display: flex; gap: 4px; flex-wrap: wrap; padding: 6px 0 4px; border-bottom: 1px solid #e2e8f0; margin-bottom: 0; }
+  .region-tab { padding: 4px 8px; border-radius: 8px; font-size: 16px; font-weight: 600; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; transition: all .15s; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
   .region-tab:hover { background: #f8fafc; }
   .region-tab.active { color: #fff; border-color: transparent; }
-  .region-tab-desc { font-size: 10px; color: #94a3b8; margin-left: 4px; font-weight: 400; }
 
   /* Reverse cluster cards */
   .rev-source-chip { font-size: 11px; color: #94a3b8; font-weight: 400; cursor: default; }
@@ -235,7 +234,6 @@
   body.dark .region-tabs { border-color: #334155; }
   body.dark .region-tab { background: #1e293b; border-color: #334155; color: #cbd5e1; }
   body.dark .region-tab:hover { background: #334155; }
-  body.dark .region-tab-desc { color: #64748b; }
 
   body.dark .news-count { color: #64748b; }
   body.dark .news-count span { color: #f1f5f9; }
@@ -586,7 +584,7 @@ const SENT_NEG = new Set([
   'потерпел','рухнул','обвалился','упал','снижается','падение',
 ]);
 
-const SENT_LABEL = { positive: '↑ позитивно', negative: '↓ негативно', neutral: '→ нейтрально' };
+const SENT_LABEL = { positive: '↑', negative: '↓', neutral: '→' };
 
 function aggregateSentiment(texts) {
   let pos = 0, neg = 0;
@@ -867,7 +865,7 @@ function renderSrcCluster(c, id) {
 
   const ruRow = ruCount > 0
     ? c.ruSourcesList.map(n => `<span class="ru-source-chip">${escHtml(n.sourceLabel)}</span>`).join('')
-    : '<span class="analog-badge analog-unique">⚠ Не найдено в российских СМИ</span>';
+    : '<span style="font-size:15px;font-weight:700;color:#d97706" title="Не найдено в российских СМИ">❕</span>';
 
   const expandContent = expanded ? `<div class="cluster-expand">
     <div class="cluster-expand-sep">${tab.flag} ${tab.label} (${c.srcSources.length})</div>
@@ -907,7 +905,7 @@ function renderSrcCluster(c, id) {
         <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
           <div class="cluster-title">${escHtml(c.title)}</div>
           <span style="font-size:10px;color:#94a3b8;white-space:nowrap">⏰ ${c.date}</span>
-          <span style="font-size:10px;padding:1px 7px;border-radius:6px;font-weight:600;white-space:nowrap;background:${cat.color}18;color:${cat.color};border:1px solid ${cat.color}30">${cat.icon} ${cat.label}</span>
+          <span style="font-size:13px;white-space:nowrap" title="${cat.label}">${cat.icon}</span>
         </div>
         <div class="ru-sources-row">
           <span style="font-size:11px;color:#64748b;font-weight:600;white-space:nowrap">${tab.flag} ${srcCount} ${srcWord}</span>
@@ -968,10 +966,9 @@ function renderRegionTabs() {
     const active = activeRegionTab === t.id;
     return `<button class="region-tab${active ? ' active' : ''}"
       style="${active ? `background:${t.color};border-color:${t.color}` : ''}"
+      title="${t.label} · ${t.desc}"
       onclick="setRegionTab('${t.id}')">
-      ${t.flag} ${t.label}
-      <span style="font-size:10px;padding:1px 6px;border-radius:6px;background:${active ? 'rgba(255,255,255,.25)' : '#f1f5f9'};color:${active ? '#fff' : '#64748b'}">${count}</span>
-      <span class="region-tab-desc">${t.desc}</span>
+      ${t.flag} <span style="font-size:11px;padding:1px 5px;border-radius:5px;background:${active ? 'rgba(255,255,255,.25)' : '#f1f5f9'};color:${active ? '#fff' : '#64748b'}">${count}</span>
     </button>`;
   }).join('');
 }
@@ -1025,7 +1022,7 @@ function renderCluster(c, id) {
         const cls = s === 'ua' ? 'world-chip-ua' : s === 'eu' ? 'world-chip-eu' : s === 'us' ? 'world-chip-us' : s === 'ar' ? 'world-chip-ar' : s === 'jp' ? 'world-chip-jp' : 'world-chip-eu';
         return `<span class="world-chip ${cls}">${m.flag} ${m.label}</span>`;
       }).join('')
-    : '<span class="analog-badge analog-unique">⚠ Только в российских СМИ</span>';
+    : '<span style="font-size:15px;font-weight:700;color:#d97706" title="Только в российских СМИ">❕</span>';
 
   const expandContent = expanded ? `<div class="cluster-expand">
     <div class="cluster-expand-sep">🇷🇺 Российские источники (${c.ruSources.length})</div>
@@ -1066,7 +1063,7 @@ function renderCluster(c, id) {
         <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
           <div class="cluster-title">${escHtml(c.title)}</div>
           <span style="font-size:10px;color:#94a3b8;white-space:nowrap;flex-shrink:0">⏰ ${c.date}</span>
-          <span style="font-size:10px;padding:1px 7px;border-radius:6px;font-weight:600;white-space:nowrap;background:${cat.color}18;color:${cat.color};border:1px solid ${cat.color}30">${cat.icon} ${cat.label}</span>
+          <span style="font-size:13px;white-space:nowrap" title="${cat.label}">${cat.icon}</span>
         </div>
         <div class="ru-sources-row">
           <span style="font-size:11px;color:#64748b;font-weight:600;white-space:nowrap">🇷🇺 ${ruCount} ${ruWord}</span>
