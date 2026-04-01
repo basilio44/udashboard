@@ -128,7 +128,7 @@
   .cluster-title { font-size: 13px; font-weight: 600; color: #1e293b; line-height: 1.4; }
   .cluster-header:hover .cluster-title { color: #2563eb; }
   .ru-sources-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 7px; }
-  .ru-source-chip { font-size: 10px; padding: 2px 7px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px; font-weight: 500; }
+  .ru-source-chip { font-size: 11px; color: #94a3b8; font-weight: 400; cursor: default; }
   .world-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 5px; }
   .world-chip { font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
   .world-chip-ua { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
@@ -193,7 +193,7 @@
   .region-tab-desc { font-size: 10px; color: #94a3b8; margin-left: 4px; font-weight: 400; }
 
   /* Reverse cluster cards */
-  .rev-source-chip { font-size: 10px; padding: 2px 7px; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; border-radius: 6px; font-weight: 500; }
+  .rev-source-chip { font-size: 11px; color: #94a3b8; font-weight: 400; cursor: default; }
 
   /* Hide */
   .hidden { display: none !important; }
@@ -216,6 +216,8 @@
   body.dark .stat-sub { color: #475569; }
 
   body.dark .filter-sep { color: #334155; }
+  body.dark .ru-source-chip { color: #475569; }
+  body.dark .rev-source-chip { color: #475569; }
   body.dark .filter-btn { color: #64748b; }
   body.dark .filter-btn:hover { color: #e2e8f0; }
   body.dark .filter-btn.active { color: #e2e8f0; }
@@ -908,12 +910,13 @@ function renderSrcCluster(c, id) {
           <span style="font-size:10px;padding:1px 7px;border-radius:6px;font-weight:600;white-space:nowrap;background:${cat.color}18;color:${cat.color};border:1px solid ${cat.color}30">${cat.icon} ${cat.label}</span>
         </div>
         <div class="ru-sources-row">
-          <span style="font-size:11px;background:${tab.color};color:#fff;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">${tab.flag} ${srcCount} ${srcWord}</span>
-          ${c.srcSources.map(n => `<span class="rev-source-chip">${escHtml(n.sourceLabel)}</span>`).join('')}
+          <span style="font-size:11px;color:#64748b;font-weight:600;white-space:nowrap">${tab.flag} ${srcCount} ${srcWord}</span>
+          <span style="color:#e2e8f0;font-size:11px">·</span>
+          ${c.srcSources.map(n => `<span class="rev-source-chip">${escHtml(n.sourceLabel)}</span>`).join('<span style="color:#e2e8f0;font-size:11px">·</span>')}
         </div>
         <div class="world-row">
           ${ruCount > 0
-            ? `<span style="font-size:11px;background:#fef2f2;color:#991b1b;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">🇷🇺 ${ruCount} РФ</span> ${ruRow}`
+            ? `<span style="font-size:11px;color:#64748b;font-weight:600;white-space:nowrap">🇷🇺 ${ruCount} РФ</span><span style="color:#e2e8f0;font-size:11px"> · </span>${c.ruSourcesList.map(n => `<span class="ru-source-chip">${escHtml(n.sourceLabel)}</span>`).join('<span style="color:#e2e8f0;font-size:11px">·</span>')}`
             : ruRow}
         </div>
         <div class="sentiment-row">
@@ -1066,8 +1069,9 @@ function renderCluster(c, id) {
           <span style="font-size:10px;padding:1px 7px;border-radius:6px;font-weight:600;white-space:nowrap;background:${cat.color}18;color:${cat.color};border:1px solid ${cat.color}30">${cat.icon} ${cat.label}</span>
         </div>
         <div class="ru-sources-row">
-          <span style="font-size:11px;background:#ef4444;color:#fff;padding:2px 8px;border-radius:8px;font-weight:700;white-space:nowrap">🇷🇺 ${ruCount} ${ruWord}</span>
-          ${c.ruSources.map(n => `<span class="ru-source-chip">${escHtml(n.sourceLabel)}</span>`).join('')}
+          <span style="font-size:11px;color:#64748b;font-weight:600;white-space:nowrap">🇷🇺 ${ruCount} ${ruWord}</span>
+          <span style="color:#e2e8f0;font-size:11px">·</span>
+          ${c.ruSources.map(n => `<span class="ru-source-chip">${escHtml(n.sourceLabel)}</span>`).join('<span style="color:#e2e8f0;font-size:11px">·</span>')}
         </div>
         <div class="world-row">${worldRow}</div>
         <div class="sentiment-row">
