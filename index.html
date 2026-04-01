@@ -763,7 +763,6 @@ async function translateAllNews(items, statusEl) {
     if (statusEl) statusEl.textContent = `Перевод: ${Math.min(i + BATCH, toTranslate.length)}/${toTranslate.length}`;
     await Promise.all(batch.map(async n => {
       n.title = await translateText(n.title);
-      n.description = await translateText(n.description);
     }));
     if (i + BATCH < toTranslate.length) await new Promise(r => setTimeout(r, 150));
   }
@@ -860,32 +859,56 @@ async function fetchAllNews() {
     })
     .sort((a, b) => b.rawDate - a.rawDate);
 
-  // Deduplicate
+  // Deduplicate + cap at 20 items per source
   const seen = new Set();
+  const perSourceCount = {};
   allNews = processed.filter(item => {
     const key = item.title.toLowerCase().replace(/[^a-zа-я0-9]/g, "").slice(0, 60);
     if (seen.has(key)) return false;
     seen.add(key);
-    return true;
+    perSourceCount[item.sourceLabel] = (perSourceCount[item.sourceLabel] || 0) + 1;
+    return perSourceCount[item.sourceLabel] <= 20;
   });
 
   document.getElementById("lastUpdated").textContent = `Обновлено: ${new Date().toLocaleTimeString("ru-RU", { hour:"2-digit", minute:"2-digit" })}`;
   btn.disabled = false;
 
-  renderProgress('Перевод заголовков...');
-  await translateAllNews(allNews, { textContent: '' });
-
-  renderProgress('Загрузка модели семантики...');
-  await computeEmbeddings(allNews, {
-    set textContent(v) { if (v) renderProgress(v); }
-  });
-
-  renderProgress('Кластеризация и анализ тональности...');
+  // === БЫСТРЫЙ РЕЗУЛЬТАТ: показываем сразу с Jaccard ===
   detectAnalogs(allNews);
   clusterRussianNews();
-
   renderFilters();
   renderClustered();
+
+  // === ФОНОВОЕ УЛУЧШЕНИЕ: перевод + семантика ===
+  const nc = document.getElementById("newsCount");
+  (async () => {
+    try {
+      // Переводим только заголовки не-RU источников
+      await translateAllNews(allNews, {
+        set textContent(v) {
+          if (v) nc.innerHTML = `<span style="color:#2563eb;font-weight:600">⟳ ${v}</span>`;
+        }
+      });
+
+      // Встраиваем только RU-новости + кандидатов на аналоги
+      const ruItems = allNews.filter(n => n.source === 'ru');
+      const candidates = [
+        ...ruItems,
+        ...allNews.filter(n => n.source !== 'ru' && ruItems.some(r => jaccardSim(r.title, n.title) >= 0.05)),
+      ];
+      await computeEmbeddings(candidates, {
+        set textContent(v) {
+          if (v) nc.innerHTML = `<span style="color:#2563eb;font-weight:600">🧠 ${v}</span>`;
+        }
+      });
+
+      // Обновляем с семантическими данными
+      detectAnalogs(allNews);
+      clusterRussianNews();
+      renderFilters();
+      renderClustered();
+    } catch (e) { console.warn('Background semantic upgrade failed:', e); }
+  })();
 }
 
 // ====== RENDERING ======
