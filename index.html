@@ -1168,10 +1168,10 @@ async function fetchAllNews() {
           if (!v || gen !== _loadGen) return;
           const mPct = v.match(/(\d+)%/);
           const mBatch = v.match(/(\d+)\/(\d+)/);
-          if (mPct) setProgress(70 + parseInt(mPct[1]) * 0.05, `Загрузка модели: ${mPct[1]}%`);
+          if (mPct) setProgress(70 + parseInt(mPct[1]) * 0.05, `Загрузка модели семантики...`);
           else if (mBatch) setProgress(75 + (parseInt(mBatch[1]) / parseInt(mBatch[2])) * 20,
             `Семантика: ${mBatch[1]}/${mBatch[2]}`);
-          else setProgress(70, v);
+          else setProgress(70, `Инициализация модели...`);
         }
       });
 
