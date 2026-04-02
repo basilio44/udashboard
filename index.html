@@ -691,6 +691,17 @@ const CLUSTER_THRESH = () => semanticMode ? 0.78 : 0.22;
 const ANALOG_THRESH  = () => semanticMode ? 0.74 : 0.25;
 const ANALOG_TIME_MS = 3 * 60 * 60 * 1000; // ±3 часа
 
+// Adaptive analog threshold: large clusters (major events) get lower threshold,
+// single-source clusters get higher threshold to reduce noise.
+// clusterSize = number of unique sources in the cluster
+function analogThreshAdaptive(clusterSize) {
+  const base = ANALOG_THRESH();
+  if (clusterSize >= 5) return base - (semanticMode ? 0.04 : 0.05); // крупное событие — мягче
+  if (clusterSize >= 3) return base - (semanticMode ? 0.02 : 0.02); // среднее — чуть мягче
+  if (clusterSize === 1) return base + (semanticMode ? 0.03 : 0.04); // один источник — строже
+  return base; // 2 источника — базовый порог
+}
+
 // Pick best representative article from a cluster group:
 // prefer non-TG, non-broadcast sources; among those pick the most informative title (longest keyword count)
 function bestRep(group) {
@@ -908,12 +919,13 @@ function clusterRussianNews() {
     // Find analogs in non-Russian sources
     const refId = rep.id;
     const clusterTime = rawDate instanceof Date ? rawDate.getTime() : 0;
+    const analogThresh = analogThreshAdaptive(ruSources.length);
     const analogs = [];
     for (const other of otherNews) {
       const otherTime = other.rawDate instanceof Date ? other.rawDate.getTime() : 0;
       if (clusterTime && otherTime && Math.abs(clusterTime - otherTime) > ANALOG_TIME_MS) continue;
       const sim = getSim(refId, title, other.id, other.title);
-      if (sim >= ANALOG_THRESH()) analogs.push({ item: other, sim });
+      if (sim >= analogThresh) analogs.push({ item: other, sim });
     }
     analogs.sort((a, b) => b.sim - a.sim);
     const analogItems = analogs.slice(0, 8).map(a => a.item);
@@ -967,12 +979,13 @@ function clusterSourceNews(source) {
     // Find RU analogs
     const refId = rep.id;
     const clusterTime = rawDate instanceof Date ? rawDate.getTime() : 0;
+    const analogThresh = analogThreshAdaptive(srcSources.length);
     const analogs = [];
     for (const ru of ruNews) {
       const ruTime = ru.rawDate instanceof Date ? ru.rawDate.getTime() : 0;
       if (clusterTime && ruTime && Math.abs(clusterTime - ruTime) > ANALOG_TIME_MS) continue;
       const sim = getSim(refId, title, ru.id, ru.title);
-      if (sim >= ANALOG_THRESH()) analogs.push({ item: ru, sim });
+      if (sim >= analogThresh) analogs.push({ item: ru, sim });
     }
     analogs.sort((a, b) => b.sim - a.sim);
     const analogItems = analogs.slice(0, 8).map(a => a.item);
