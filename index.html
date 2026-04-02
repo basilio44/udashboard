@@ -616,6 +616,7 @@ function getSim(idA, titleA, idB, titleB) {
 
 const CLUSTER_THRESH = () => semanticMode ? 0.78 : 0.22;
 const ANALOG_THRESH  = () => semanticMode ? 0.74 : 0.25;
+const ANALOG_TIME_MS = 3 * 60 * 60 * 1000; // ±3 часа
 
 // Pick best representative article from a cluster group:
 // prefer non-TG, non-broadcast sources; among those pick the most informative title (longest keyword count)
@@ -786,7 +787,10 @@ function detectAnalogs(news) {
   const otherNews = news.filter(n => n.source !== 'ru');
   for (const ru of ruNews) {
     const analogs = [];
+    const ruTime = ru.rawDate instanceof Date ? ru.rawDate.getTime() : 0;
     for (const other of otherNews) {
+      const otherTime = other.rawDate instanceof Date ? other.rawDate.getTime() : 0;
+      if (ruTime && otherTime && Math.abs(ruTime - otherTime) > ANALOG_TIME_MS) continue;
       const sim = getSim(ru.id, ru.title, other.id, other.title);
       if (sim >= ANALOG_THRESH()) analogs.push({ item: other, sim });
     }
@@ -830,8 +834,11 @@ function clusterRussianNews() {
 
     // Find analogs in non-Russian sources
     const refId = rep.id;
+    const clusterTime = rawDate instanceof Date ? rawDate.getTime() : 0;
     const analogs = [];
     for (const other of otherNews) {
+      const otherTime = other.rawDate instanceof Date ? other.rawDate.getTime() : 0;
+      if (clusterTime && otherTime && Math.abs(clusterTime - otherTime) > ANALOG_TIME_MS) continue;
       const sim = getSim(refId, title, other.id, other.title);
       if (sim >= ANALOG_THRESH()) analogs.push({ item: other, sim });
     }
@@ -886,8 +893,11 @@ function clusterSourceNews(source) {
 
     // Find RU analogs
     const refId = rep.id;
+    const clusterTime = rawDate instanceof Date ? rawDate.getTime() : 0;
     const analogs = [];
     for (const ru of ruNews) {
+      const ruTime = ru.rawDate instanceof Date ? ru.rawDate.getTime() : 0;
+      if (clusterTime && ruTime && Math.abs(clusterTime - ruTime) > ANALOG_TIME_MS) continue;
       const sim = getSim(refId, title, ru.id, ru.title);
       if (sim >= ANALOG_THRESH()) analogs.push({ item: ru, sim });
     }
