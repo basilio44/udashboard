@@ -553,7 +553,19 @@ function getSim(idA, titleA, idB, titleB) {
 }
 
 const CLUSTER_THRESH = () => semanticMode ? 0.78 : 0.18;
-const ANALOG_THRESH  = () => semanticMode ? 0.68 : 0.13;
+const ANALOG_THRESH  = () => semanticMode ? 0.72 : 0.20;
+
+// Pick best representative article from a cluster group:
+// prefer non-TG, non-broadcast sources; among those pick the most informative title (longest keyword count)
+function bestRep(group) {
+  const nonTG = group.filter(n => !n.sourceLabel?.includes('(TG)'));
+  const pool = nonTG.length > 0 ? nonTG : group;
+  // sort by keyword richness desc, then by date desc
+  return pool.sort((a, b) => {
+    const ka = getKeyWords(a.title).length, kb = getKeyWords(b.title).length;
+    return ka !== kb ? kb - ka : b.rawDate - a.rawDate;
+  })[0];
+}
 
 // ====== SENTIMENT ======
 const SENT_POS = new Set([
@@ -740,10 +752,11 @@ function clusterRussianNews() {
       if (getSim(ruNews[i].id, ruNews[i].title, ruNews[j].id, ruNews[j].title) >= CLUSTER_THRESH()) { group.push(ruNews[j]); used.add(j); }
     }
     const sorted = [...group].sort((a, b) => b.rawDate - a.rawDate);
-    const title = sorted[0].title;
-    const link = sorted[0].link;
-    const date = sorted[0].date;
-    const rawDate = sorted[0].rawDate;
+    const rep = bestRep(group);
+    const title = rep.title;
+    const link = rep.link;
+    const date = rep.date;
+    const rawDate = sorted[0].rawDate; // keep cluster date as most recent
     const category = detectCategory(group.map(g => g.title).join(' '), '');
 
     // Unique Russian sources in cluster
@@ -754,7 +767,7 @@ function clusterRussianNews() {
     }
 
     // Find analogs in non-Russian sources
-    const refId = sorted[0].id;
+    const refId = rep.id;
     const analogs = [];
     for (const other of otherNews) {
       const sim = getSim(refId, title, other.id, other.title);
@@ -796,9 +809,10 @@ function clusterSourceNews(source) {
       if (getSim(srcNews[i].id, srcNews[i].title, srcNews[j].id, srcNews[j].title) >= CLUSTER_THRESH()) { group.push(srcNews[j]); used.add(j); }
     }
     const sorted = [...group].sort((a, b) => b.rawDate - a.rawDate);
-    const title = sorted[0].title;
-    const link  = sorted[0].link;
-    const date  = sorted[0].date;
+    const rep = bestRep(group);
+    const title = rep.title;
+    const link  = rep.link;
+    const date  = rep.date;
     const rawDate = sorted[0].rawDate;
     const category = detectCategory(group.map(g => g.title).join(' '), '');
 
@@ -809,7 +823,7 @@ function clusterSourceNews(source) {
     }
 
     // Find RU analogs
-    const refId = sorted[0].id;
+    const refId = rep.id;
     const analogs = [];
     for (const ru of ruNews) {
       const sim = getSim(refId, title, ru.id, ru.title);
