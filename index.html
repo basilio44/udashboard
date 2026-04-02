@@ -608,7 +608,94 @@ function cosineSim(a, b) {
   return dot;
 }
 
+// NER-lite: extract proper nouns — capitalized words (RU/EN), known geo/org/person names
+// RU: слова с заглавной буквы не в начале предложения, длиннее 3 символов
+// EN: capitalized words excluding sentence start, longer than 3 chars
+// Also: normalizes known cross-language aliases (Kyiv/Киев, Trump/Трамп, etc.)
+
+const NER_ALIASES = {
+  // Места
+  'kyiv':'киев','kiev':'киев','kyjiv':'киев',
+  'moscow':'москва','moskva':'москва',
+  'kharkiv':'харьков','kharkov':'харьков',
+  'odessa':'одесса','odesa':'одесса',
+  'mariupol':'мариуполь',
+  'zaporizhzhia':'запорожье','zaporizhia':'запорожье',
+  'kherson':'херсон',
+  'bakhmut':'бахмут','artemivsk':'бахмут',
+  'donetsk':'донецк',
+  'lugansk':'луганск','luhansk':'луганск',
+  'crimea':'крым','krym':'крым',
+  'belarus':'беларусь','byelorussia':'беларусь',
+  'iran':'иран','tehran':'тегеран',
+  'israel':'израиль','jerusalem':'иерусалим','gaza':'газа',
+  'syria':'сирия','damascus':'дамаск',
+  'china':'китай','beijing':'пекин',
+  'nato':'нато',
+  // Люди
+  'trump':'трамп','zelenskyy':'зеленский','zelensky':'зеленский',
+  'putin':'путин','biden':'байден','macron':'макрон',
+  'scholz':'шольц','erdogan':'эрдоган','modi':'моди',
+  'lavrov':'лавров','peskov':'песков',
+  // Организации
+  'pentagon':'пентагон','kremlin':'кремль',
+  'un':'оон','nato':'нато','eu':'евросоюз',
+};
+
+function getNER(title) {
+  const entities = new Set();
+
+  // 1. EN capitalized words (not first word of sentence)
+  const enWords = title.split(/\s+/);
+  for (let i = 1; i < enWords.length; i++) {
+    const w = enWords[i].replace(/[^a-zA-Z]/g, '');
+    if (w.length > 3 && /^[A-Z]/.test(w)) {
+      const low = w.toLowerCase();
+      entities.add(NER_ALIASES[low] || low);
+    }
+  }
+  // Also first word if it's EN and there's a colon/dash pattern (source prefix: Title)
+  const colonMatch = title.match(/^[A-Za-z\s]+:\s*([A-Z][a-z]+)/);
+  if (colonMatch) {
+    const w = colonMatch[1].toLowerCase();
+    entities.add(NER_ALIASES[w] || w);
+  }
+
+  // 2. RU слова с заглавной буквы не в начале (позиция > 0 после знаков препинания)
+  // Разбиваем по предложениям, берём заглавные НЕ в начале предложения
+  const sentences = title.split(/(?<=[.!?»])\s+/);
+  for (const sent of sentences) {
+    const words = sent.split(/\s+/);
+    for (let i = 1; i < words.length; i++) {
+      const w = words[i].replace(/[^а-яёА-ЯЁ]/g, '');
+      if (w.length > 3 && /^[А-ЯЁ]/.test(w)) {
+        entities.add(w.toLowerCase());
+      }
+    }
+  }
+
+  // 3. Known aliases from EN→RU normalization on full title
+  const titleLow = title.toLowerCase();
+  for (const [alias, canon] of Object.entries(NER_ALIASES)) {
+    if (titleLow.includes(alias)) entities.add(canon);
+  }
+
+  return entities;
+}
+
+// Check if two titles share at least one named entity
+// Returns true if entities overlap OR if neither title has detectable entities (don't filter)
+function nerCompatible(titleA, titleB) {
+  const ea = getNER(titleA);
+  const eb = getNER(titleB);
+  if (ea.size === 0 || eb.size === 0) return true; // can't determine — don't reject
+  for (const e of ea) if (eb.has(e)) return true;
+  return false;
+}
+
 function getSim(idA, titleA, idB, titleB) {
+  // NER gate: if no shared named entities → not analogs regardless of score
+  if (!nerCompatible(titleA, titleB)) return 0;
   if (semanticMode && newsEmbeddings.has(idA) && newsEmbeddings.has(idB))
     return cosineSim(newsEmbeddings.get(idA), newsEmbeddings.get(idB));
   return jaccardSimIDF(titleA, titleB);
