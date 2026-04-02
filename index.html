@@ -525,13 +525,57 @@ let expandedSet = new Set();
 let allExpanded = false;
 
 // ====== CROSS-SOURCE COMPARISON ======
-const STOP_RU = new Set(['это','для','при','как','что','его','они','она','или','так','уже','все','была','были','будет','свои','после','перед','через','также','кроме','между','против','только','очень','этот','этих','этой','этого','того','тому','такой','такие','нового','новой','есть','нет','над','под','без','ее','их','там','тут','где','когда','если','чтобы','даже','ещё','еще','можно','нужно','весь','всей','всех','было','стало','который','которые','которую','которого','которой','которых','одна','одно','одни','двух','трех','пяти']);
+const STOP_RU = new Set([
+  'это','для','при','как','что','его','они','она','или','так','уже','все','была','были','будет','свои',
+  'после','перед','через','также','кроме','между','против','только','очень','этот','этих','этой','этого',
+  'того','тому','такой','такие','нового','новой','есть','нет','над','под','без','ее','их','там','тут',
+  'где','когда','если','чтобы','даже','ещё','еще','можно','нужно','весь','всей','всех','было','стало',
+  'который','которые','которую','которого','которой','которых','одна','одно','одни','двух','трех','пяти',
+  // Высокочастотные контекстные слова — не несут уникальности события
+  'россия','россий','российск','российские','российских','российского','российской','российском',
+  'украина','украин','украинск','украинские','украинских','украинского','украинской',
+  'заявил','заявила','заявили','сообщил','сообщила','сообщили','рассказал','рассказали',
+  'стало','стала','стали','будет','будут','может','могут','должен','должна','должны',
+  'новый','новая','новые','новых','первый','первая','первые','первых',
+  'сегодня','вчера','утром','вечером','ночью','днем','часов','минут',
+  'году','года','годов','лет','месяц','месяца','недели','неделю',
+  'тысяч','тысячи','миллион','миллиона','миллионов','миллиард',
+  'рублей','рублях','рубля','доллар','долларов','долларов','евро',
+  'вооруженн','военн','армии','армия','силы','силах',
+  // EN общие слова
+  'that','this','with','from','have','been','will','more','about','they','were','their',
+  'also','said','says','told','year','years','after','some','than','what','when','which',
+  'there','could','would','should','under','over','into','says','amid','amid',
+]);
 
 function getKeyWords(title) {
-  return title.toLowerCase().replace(/[^а-яёa-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !STOP_RU.has(w));
+  return title.toLowerCase()
+    .replace(/[^а-яёa-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 3 && !STOP_RU.has(w));
+}
+
+// IDF weights: built from all loaded news titles — rare words get higher weight
+let _wordIDF = null;
+
+function buildIDF(news) {
+  const N = news.length;
+  if (N === 0) { _wordIDF = null; return; }
+  const df = {};
+  for (const n of news) {
+    for (const w of new Set(getKeyWords(n.title))) {
+      df[w] = (df[w] || 0) + 1;
+    }
+  }
+  _wordIDF = {};
+  for (const [w, count] of Object.entries(df)) {
+    // IDF = log((N+1)/(count+1)) — words in >30% of docs get low weight
+    _wordIDF[w] = Math.log((N + 1) / (count + 1));
+  }
 }
 
 function jaccardSim(a, b) {
+  // Unweighted — used for cheap pre-filter only
   const sa = new Set(getKeyWords(a)), sb = new Set(getKeyWords(b));
   let inter = 0;
   for (const w of sa) if (sb.has(w)) inter++;
@@ -539,8 +583,26 @@ function jaccardSim(a, b) {
   return union > 0 ? inter / union : 0;
 }
 
+function jaccardSimIDF(a, b) {
+  if (!_wordIDF) return jaccardSim(a, b);
+  const wa = getKeyWords(a);
+  const wb = getKeyWords(b);
+  const mapA = new Map(), mapB = new Map();
+  for (const w of wa) mapA.set(w, _wordIDF[w] ?? 1);
+  for (const w of wb) mapB.set(w, _wordIDF[w] ?? 1);
+  let inter = 0, sharedCount = 0;
+  for (const [w, wt] of mapA) {
+    if (mapB.has(w)) { inter += wt; sharedCount++; }
+  }
+  // Require at least 2 matching content words to avoid single-word false matches
+  if (sharedCount < 2) return 0;
+  let union = 0;
+  const all = new Set([...mapA.keys(), ...mapB.keys()]);
+  for (const w of all) union += Math.max(mapA.get(w) || 0, mapB.get(w) || 0);
+  return union > 0 ? inter / union : 0;
+}
+
 function cosineSim(a, b) {
-  // vectors are pre-normalized → dot product = cosine similarity
   let dot = 0;
   for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
   return dot;
@@ -549,11 +611,11 @@ function cosineSim(a, b) {
 function getSim(idA, titleA, idB, titleB) {
   if (semanticMode && newsEmbeddings.has(idA) && newsEmbeddings.has(idB))
     return cosineSim(newsEmbeddings.get(idA), newsEmbeddings.get(idB));
-  return jaccardSim(titleA, titleB);
+  return jaccardSimIDF(titleA, titleB);
 }
 
-const CLUSTER_THRESH = () => semanticMode ? 0.78 : 0.18;
-const ANALOG_THRESH  = () => semanticMode ? 0.72 : 0.20;
+const CLUSTER_THRESH = () => semanticMode ? 0.78 : 0.22;
+const ANALOG_THRESH  = () => semanticMode ? 0.74 : 0.25;
 
 // Pick best representative article from a cluster group:
 // prefer non-TG, non-broadcast sources; among those pick the most informative title (longest keyword count)
@@ -1333,6 +1395,7 @@ async function fetchAllNews() {
 
   // === БЫСТРЫЙ РЕЗУЛЬТАТ: показываем сразу с Jaccard ===
   setProgress(50, 'Кластеризация...');
+  buildIDF(allNews);
   detectAnalogs(allNews);
   clusterRussianNews();
   renderRegionTabs();
