@@ -1373,13 +1373,14 @@ async function translateText(text) {
 }
 
 async function translateAllNews(items, statusEl) {
-  const toTranslate = items.filter(n => n.source !== 'ru');
+  const toTranslate = items.filter(n => n.source !== 'ru' && !n.originalTitle);
   const BATCH = 6;
   for (let i = 0; i < toTranslate.length; i += BATCH) {
     const batch = toTranslate.slice(i, i + BATCH);
     if (statusEl) statusEl.textContent = `Перевод: ${Math.min(i + BATCH, toTranslate.length)}/${toTranslate.length}`;
     await Promise.all(batch.map(async n => {
-      n.title = await translateText(n.title);
+      n.originalTitle = n.title;           // сохраняем оригинал
+      n.title = await translateText(n.title); // переводим
     }));
     if (i + BATCH < toTranslate.length) await new Promise(r => setTimeout(r, 150));
   }
@@ -1514,7 +1515,18 @@ async function fetchAllNews() {
 
       if (gen !== _loadGen) return; // отменено новым запросом
 
-      // Встраиваем только RU-новости + кандидатов на аналоги
+      // Перестраиваем IDF по переведённым заголовкам — теперь RU и иностранные в одном словаре
+      buildIDF(allNews);
+
+      // Промежуточный Jaccard-прогон по переведённым заголовкам
+      detectAnalogs(allNews);
+      clusterRussianNews();
+      renderRegionTabs();
+      renderCurrentTab();
+
+      if (gen !== _loadGen) return;
+
+      // Встраиваем только RU-новости + кандидатов на аналоги (по переведённым заголовкам)
       const ruItems = allNews.filter(n => n.source === 'ru');
       const candidates = [
         ...ruItems,
