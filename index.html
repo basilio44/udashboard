@@ -1128,7 +1128,13 @@ async function fetchWithProxy(url, pi = 0) {
   try {
     const r = await fetch(CORS_PROXIES[pi](url), { signal: AbortSignal.timeout(10000) });
     if (!r.ok) throw new Error(r.status);
-    return await r.text();
+    const buf = await r.arrayBuffer();
+    // Sniff encoding from XML declaration: <?xml ... encoding="windows-1251"?>
+    const sniff = new TextDecoder('utf-8').decode(buf.slice(0, 200));
+    const encMatch = sniff.match(/encoding=["']([^"']+)["']/i);
+    const enc = encMatch ? encMatch[1].toLowerCase() : 'utf-8';
+    const isCyrillic = enc === 'windows-1251' || enc === 'cp1251' || enc === 'koi8-r' || enc === 'iso-8859-5';
+    return new TextDecoder(isCyrillic ? enc : 'utf-8').decode(buf);
   } catch { return fetchWithProxy(url, pi + 1); }
 }
 
