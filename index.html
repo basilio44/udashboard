@@ -696,8 +696,7 @@ const ANALOG_TIME_MS = 3 * 60 * 60 * 1000; // ±3 часа
 // clusterSize = number of unique sources in the cluster
 function analogThreshAdaptive(clusterSize) {
   const base = ANALOG_THRESH();
-  if (clusterSize >= 5) return base - (semanticMode ? 0.04 : 0.05); // крупное событие — мягче
-  if (clusterSize >= 3) return base - (semanticMode ? 0.02 : 0.02); // среднее — чуть мягче
+  if (clusterSize >= 3) return base - (semanticMode ? 0.04 : 0.05); // крупное событие — мягче
   if (clusterSize === 1) return base + (semanticMode ? 0.03 : 0.04); // один источник — строже
   return base; // 2 источника — базовый порог
 }
