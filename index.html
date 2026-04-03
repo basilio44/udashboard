@@ -534,11 +534,99 @@ const STOP_RU = new Set([
   'there','could','would','should','under','over','into','says','amid','amid',
 ]);
 
+function stripDescForMatch(d) {
+  return (d || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Убирает префиксы (Breaking, агентства), лишние кавычки и эмодзи — для единого матчинга */
+function normalizeTitleForMatch(s) {
+  if (!s) return '';
+  let t = s.trim().replace(/^[\s"'«»„‚]+|[\s"'«»„‚]+$/g, '');
+  try {
+    t = t.replace(/[\u{1F300}-\u{1FAFF}\u2600-\u27BF\uFE0F\u200D]/gu, ' ');
+  } catch {
+    t = t.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ' ');
+  }
+  const leadColon = /^(BREAKING|UPDATE|UPDATES|EXCLUSIVE|URGENT|LIVE|WATCH|RECAP|ANALYSIS|OPINION|COMMENTARY|EXPLAINED|VIDEO|AUDIO|NEWS|REPORT|FACT\s*CHECK|SPONSORED|Срочно|Эксклюзив|Важно|Лента\s*новостей)\s*[:|—\-–]\s*/i;
+  const leadWord = /^(BREAKING|UPDATE|EXCLUSIVE|URGENT|LIVE|WATCH|RECAP)\s+/i;
+  for (let k = 0; k < 5; k++) {
+    const before = t;
+    t = t.replace(leadColon, '').replace(leadWord, '').trim();
+    if (t === before) break;
+  }
+  t = t.replace(/^(TASS|Reuters|Associated Press|AP News|AFP|BBC|RBC|CNN|RT\b|Bloomberg|NYT|New York Times|Washington Post|Financial Times|Al Jazeera|UNIAN|Ukrinform|Kyiv Independent|RIA|Коммерсант|РИА|ТАСС|Известия|Лента|Газета)\s*[—\-–:|]\s*/i, '');
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
+}
+
+/** Числа ≥10, проценты, даты — для усиления совпадений и отсечения явных противоречий */
+function extractAnchorsFromText(text) {
+  const nums = new Set();
+  const pcts = new Set();
+  const dates = new Set();
+  if (!text) return { nums, pcts, dates };
+  for (const m of text.matchAll(/\b(20\d{2}-\d{2}-\d{2})\b/g)) dates.add(m[1]);
+  for (const m of text.matchAll(/\b(\d{1,2})\.(\d{1,2})\.(20\d{2})\b/g)) {
+    dates.add(`${m[3]}-${String(m[2]).padStart(2, '0')}-${String(m[1]).padStart(2, '0')}`);
+  }
+  for (const m of text.matchAll(/\b(\d{1,3}(?:[\s\u00A0]\d{3})+)\b|\b(\d{2,})\b/g)) {
+    const raw = String(m[1] || m[2] || '').replace(/\s/g, '');
+    const v = parseInt(raw, 10);
+    if (isNaN(v) || v < 10) continue;
+    if (v >= 1990 && v <= 2035) continue;
+    nums.add(v);
+  }
+  for (const m of text.matchAll(/(\d+)\s*%/g)) {
+    const v = parseInt(m[1], 10);
+    if (!isNaN(v) && v >= 2) pcts.add(v);
+  }
+  return { nums, pcts, dates };
+}
+
+function getMatchTitle(n) {
+  if (!n) return '';
+  if (n.matchTitle != null && n.matchTitle !== '') return n.matchTitle;
+  return normalizeTitleForMatch(n.title);
+}
+
+function refreshAnchorsForItem(n) {
+  const blob = `${getMatchTitle(n)} ${n.matchDesc || ''}`;
+  n._anchors = extractAnchorsFromText(blob);
+}
+
+function anchorsConflict(a, b) {
+  const A = a && a._anchors, B = b && b._anchors;
+  if (!A || !B) return false;
+  if (A.nums.size > 0 && B.nums.size > 0) {
+    for (const x of A.nums) if (B.nums.has(x)) return false;
+    return true;
+  }
+  if (A.pcts.size > 0 && B.pcts.size > 0) {
+    for (const x of A.pcts) if (B.pcts.has(x)) return false;
+    return true;
+  }
+  return false;
+}
+
+function anchorBoost(a, b) {
+  const A = a && a._anchors, B = b && b._anchors;
+  if (!A || !B) return 0;
+  let boost = 0;
+  for (const x of A.nums) if (B.nums.has(x)) boost += 0.045;
+  for (const x of A.pcts) if (B.pcts.has(x)) boost += 0.04;
+  for (const d of A.dates) if (B.dates.has(d)) boost += 0.05;
+  return Math.min(0.14, boost);
+}
+
 function getKeyWords(title) {
   return title.toLowerCase()
     .replace(/[^а-яёa-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter(w => w.length > 3 && !STOP_RU.has(w));
+}
+
+function getKeyWordsForNews(n) {
+  return getKeyWords(getMatchTitle(n));
 }
 
 // IDF weights: built from all loaded news titles — rare words get higher weight
@@ -549,7 +637,7 @@ function buildIDF(news) {
   if (N === 0) { _wordIDF = null; return; }
   const df = {};
   for (const n of news) {
-    for (const w of new Set(getKeyWords(n.title))) {
+    for (const w of new Set(getKeyWordsForNews(n))) {
       df[w] = (df[w] || 0) + 1;
     }
   }
@@ -680,11 +768,20 @@ function nerCompatible(titleA, titleB) {
 }
 
 function getSim(idA, titleA, idB, titleB) {
-  // NER gate: if no shared named entities → not analogs regardless of score
-  if (!nerCompatible(titleA, titleB)) return 0;
+  const na = allNews.find(n => n.id === idA);
+  const nb = allNews.find(n => n.id === idB);
+  const ta = na ? getMatchTitle(na) : normalizeTitleForMatch(titleA);
+  const tb = nb ? getMatchTitle(nb) : normalizeTitleForMatch(titleB);
+  if (anchorsConflict(na, nb)) return 0;
+  // NER gate: if no shared named entities → not analogs regardless of score (на нормализованных RU-строках)
+  if (!nerCompatible(ta, tb)) return 0;
+  let base;
   if (semanticMode && newsEmbeddings.has(idA) && newsEmbeddings.has(idB))
-    return cosineSim(newsEmbeddings.get(idA), newsEmbeddings.get(idB));
-  return jaccardSimIDF(titleA, titleB);
+    base = cosineSim(newsEmbeddings.get(idA), newsEmbeddings.get(idB));
+  else
+    base = jaccardSimIDF(ta, tb);
+  const boost = anchorBoost(na, nb);
+  return Math.min(1, base + boost);
 }
 
 const CLUSTER_THRESH = () => semanticMode ? 0.78 : 0.22;
@@ -708,7 +805,7 @@ function bestRep(group) {
   const pool = nonTG.length > 0 ? nonTG : group;
   // sort by keyword richness desc, then by date desc
   return pool.sort((a, b) => {
-    const ka = getKeyWords(a.title).length, kb = getKeyWords(b.title).length;
+    const ka = getKeyWordsForNews(a).length, kb = getKeyWordsForNews(b).length;
     return ka !== kb ? kb - ka : b.rawDate - a.rawDate;
   })[0];
 }
@@ -800,7 +897,7 @@ async function computeEmbeddings(items, statusEl) {
     for (let i = 0; i < items.length; i += BATCH) {
       const batch = items.slice(i, i + BATCH);
       if (statusEl) statusEl.textContent = `Семантический анализ: ${Math.min(i + BATCH, items.length)}/${items.length}`;
-      const out = await model(batch.map(n => n.title), { pooling: 'mean', normalize: true });
+      const out = await model(batch.map(n => getMatchTitle(n)), { pooling: 'mean', normalize: true });
       const arr = out.tolist();
       batch.forEach((n, j) => newsEmbeddings.set(n.id, arr[j]));
       out.dispose?.();
@@ -821,7 +918,7 @@ function findCrossSourceStories(news, maxStories = 4) {
     used.add(i);
     for (let j = i + 1; j < pool.length; j++) {
       if (used.has(j)) continue;
-      if (jaccardSim(pool[i].title, pool[j].title) >= 0.22) { group.push(pool[j]); used.add(j); }
+      if (jaccardSim(getMatchTitle(pool[i]), getMatchTitle(pool[j])) >= 0.22) { group.push(pool[j]); used.add(j); }
     }
     const srcSet = new Set(group.map(n => n.source));
     if (srcSet.size >= 2) {
@@ -1377,8 +1474,12 @@ async function translateAllNews(items, statusEl) {
     const batch = toTranslate.slice(i, i + BATCH);
     if (statusEl) statusEl.textContent = `Перевод: ${Math.min(i + BATCH, toTranslate.length)}/${toTranslate.length}`;
     await Promise.all(batch.map(async n => {
-      n.originalTitle = n.title;           // сохраняем оригинал
-      n.title = await translateText(n.title); // переводим
+      n.originalTitle = n.title;
+      n.title = await translateText(n.title);
+      const dPlain = stripDescForMatch(n.description);
+      n.matchDesc = dPlain ? await translateText(dPlain.slice(0, 420)) : '';
+      n.matchTitle = normalizeTitleForMatch(n.title);
+      refreshAnchorsForItem(n);
     }));
     if (i + BATCH < toTranslate.length) await new Promise(r => setTimeout(r, 150));
   }
@@ -1460,10 +1561,15 @@ async function fetchAllNews() {
       const cat = item.feedCategory || detectCategory(item.title, item.description);
       const src = detectSource(item.feedSource, item.link);
       const date = item.pubDate ? new Date(item.pubDate) : new Date();
+      const description = item.description || "Подробности по ссылке на источник.";
+      const matchTitle = normalizeTitleForMatch(item.title);
+      const matchDesc = stripDescForMatch(description);
       return {
         id: `${src}-${i}-${Date.now()}`,
         title: item.title,
-        description: item.description || "Подробности по ссылке на источник.",
+        description,
+        matchTitle,
+        matchDesc,
         link: item.link,
         category: cat,
         source: src,
@@ -1485,6 +1591,8 @@ async function fetchAllNews() {
     perSourceCount[item.sourceLabel] = (perSourceCount[item.sourceLabel] || 0) + 1;
     return perSourceCount[item.sourceLabel] <= 20;
   });
+
+  allNews.forEach(n => refreshAnchorsForItem(n));
 
   document.getElementById("lastUpdated").textContent = `Обновлено: ${new Date().toLocaleTimeString("ru-RU", { hour:"2-digit", minute:"2-digit" })}`;
   btn.disabled = false;
@@ -1528,7 +1636,7 @@ async function fetchAllNews() {
       const ruItems = allNews.filter(n => n.source === 'ru');
       const candidates = [
         ...ruItems,
-        ...allNews.filter(n => n.source !== 'ru' && ruItems.some(r => jaccardSim(r.title, n.title) >= 0.05)),
+        ...allNews.filter(n => n.source !== 'ru' && ruItems.some(r => jaccardSim(getMatchTitle(r), getMatchTitle(n)) >= 0.05)),
       ];
       await computeEmbeddings(candidates, {
         set textContent(v) {
